@@ -7,6 +7,7 @@ import { Queue } from "bullmq";
 import type { Queue as QueueType } from "bullmq";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
+import type { InputSection } from "../models/Assignment";
 
 /**
  * Job data shape for question generation
@@ -20,6 +21,7 @@ export interface QuestionGenerationJobData {
   questionTypes: string[];
   instructions?: string;
   fileContent?: string;
+  sections?: InputSection[];
 }
 
 /**
