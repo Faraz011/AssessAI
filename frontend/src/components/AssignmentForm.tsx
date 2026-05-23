@@ -99,13 +99,10 @@ export default function AssignmentForm() {
       formData.append("numQuestions[sectionB]", data.sectionB);
       formData.append("numQuestions[sectionC]", data.sectionC);
 
-      const response = await fetch(
-        `${getApiUrl()}/api/assessment/create`,
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
+      const response = await fetch(`${getApiUrl()}/api/assessment/create`, {
+        method: "POST",
+        body: formData,
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
