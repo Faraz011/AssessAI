@@ -13,9 +13,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-gradient-to-b from-[#eee] to-[#dadada]">
       <Sidebar />
       <DashboardHeader />
-      <div className="ml-[327px] mt-[72px]">
-        {children}
-      </div>
+      <div className="ml-[327px] mt-[72px]">{children}</div>
     </div>
   );
 }
