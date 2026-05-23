@@ -11,6 +11,8 @@ type QuestionType = {
   name: string;
   count: number;
   marks: number;
+  type: "MCQ" | "ShortAnswer" | "LongAnswer" | "TrueFalse" | "FillInTheBlank";
+  difficulty: "Easy" | "Moderate" | "Hard";
 };
 
 export default function CreateAssignment() {
@@ -23,10 +25,10 @@ export default function CreateAssignment() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [questionTypes, setQuestionTypes] = useState<QuestionType[]>([
-    { id: "1", name: "Multiple Choice Questions", count: 4, marks: 1 },
-    { id: "2", name: "Short Questions", count: 3, marks: 2 },
-    { id: "3", name: "Diagram/Graph-Based Questions", count: 5, marks: 5 },
-    { id: "4", name: "Numerical Problems", count: 5, marks: 5 },
+    { id: "1", name: "Multiple Choice Questions", count: 4, marks: 1, type: "MCQ", difficulty: "Easy" },
+    { id: "2", name: "Short Questions", count: 3, marks: 2, type: "ShortAnswer", difficulty: "Moderate" },
+    { id: "3", name: "Diagram/Graph-Based Questions", count: 5, marks: 5, type: "LongAnswer", difficulty: "Hard" },
+    { id: "4", name: "Numerical Problems", count: 5, marks: 5, type: "ShortAnswer", difficulty: "Moderate" },
   ]);
 
   const totalQuestions = questionTypes.reduce((sum, qt) => sum + qt.count, 0);
@@ -66,7 +68,7 @@ export default function CreateAssignment() {
       Math.max(...questionTypes.map((qt) => parseInt(qt.id)), 0) + 1;
     setQuestionTypes([
       ...questionTypes,
-      { id: newId.toString(), name: "New Question Type", count: 0, marks: 1 },
+      { id: newId.toString(), name: "New Question Type", count: 0, marks: 1, type: "ShortAnswer", difficulty: "Moderate" },
     ]);
   };
 
@@ -94,15 +96,22 @@ export default function CreateAssignment() {
       const formData = new FormData();
       formData.append("title", title);
       formData.append("grade", grade);
+      
+      // Send all question types with their custom settings
       formData.append(
-        "numQuestions",
-        JSON.stringify({
-          sectionA: questionTypes[0]?.count || 0,
-          sectionB: questionTypes[1]?.count || 0,
-          sectionC: questionTypes[2]?.count || 0,
-        }),
+        "sections",
+        JSON.stringify(
+          questionTypes
+            .filter((qt) => qt.count > 0) // Only include sections with questions
+            .map((qt) => ({
+              name: qt.name,
+              count: qt.count,
+              marksPerQ: qt.marks,
+              type: qt.type,
+              difficulty: qt.difficulty,
+            }))
+        )
       );
-      formData.append("questionTypes", JSON.stringify(["MCQ"]));
 
       if (dueDate) {
         formData.append("dueDate", dueDate);
@@ -309,74 +318,135 @@ export default function CreateAssignment() {
                   {questionTypes.map((qt) => (
                     <div
                       key={qt.id}
-                      className="flex items-center gap-4 p-4 bg-[#f6f6f6] rounded-lg hover:bg-[#f0f0f0] transition-colors"
+                      className="p-4 bg-[#f6f6f6] rounded-lg hover:bg-[#f0f0f0] transition-colors"
                     >
-                      {/* Question Type Name and Dropdown */}
-                      <select className="flex-1 px-4 py-2 bg-white border border-[#d4d4d4] rounded-lg text-[#303030] focus:outline-none focus:border-[#303030] transition-colors">
-                        <option>{qt.name}</option>
-                        <option>Multiple Choice Questions</option>
-                        <option>Short Questions</option>
-                        <option>Diagram/Graph-Based Questions</option>
-                        <option>Numerical Problems</option>
-                        <option>Essay Questions</option>
-                        <option>Matching Questions</option>
-                        <option>Fill in the Blanks</option>
-                      </select>
+                      {/* Top Row: Name, Type, Difficulty, Remove */}
+                      <div className="flex items-center gap-3 mb-3">
+                        {/* Question Type Name */}
+                        <input
+                          type="text"
+                          value={qt.name}
+                          onChange={(e) => {
+                            setQuestionTypes(
+                              questionTypes.map((q) =>
+                                q.id === qt.id ? { ...q, name: e.target.value } : q
+                              )
+                            );
+                          }}
+                          className="flex-1 px-3 py-2 bg-white border border-[#d4d4d4] rounded-lg text-[#303030] text-sm focus:outline-none focus:border-[#303030]"
+                          placeholder="Question Type Name"
+                        />
 
-                      {/* Remove Button */}
-                      <button
-                        onClick={() => removeQuestionType(qt.id)}
-                        className="p-2 text-[#a9a9a9] hover:text-[#303030] transition-colors"
-                        title="Remove question type"
-                      >
-                        <X size={20} />
-                      </button>
+                        {/* Type Dropdown */}
+                        <select
+                          value={qt.type}
+                          onChange={(e) => {
+                            setQuestionTypes(
+                              questionTypes.map((q) =>
+                                q.id === qt.id
+                                  ? { ...q, type: e.target.value as QuestionType["type"] }
+                                  : q
+                              )
+                            );
+                          }}
+                          className="px-3 py-2 bg-white border border-[#d4d4d4] rounded-lg text-[#303030] text-sm focus:outline-none focus:border-[#303030]"
+                        >
+                          <option value="MCQ">MCQ</option>
+                          <option value="ShortAnswer">Short Answer</option>
+                          <option value="LongAnswer">Long Answer</option>
+                          <option value="TrueFalse">True/False</option>
+                          <option value="FillInTheBlank">Fill in Blank</option>
+                        </select>
 
-                      {/* Number of Questions */}
-                      <div className="flex flex-col items-center gap-2">
-                        <label className="text-xs font-bold text-[#303030]">
-                          No. of Questions
-                        </label>
-                        <div className="flex items-center bg-white rounded-full px-2 py-1 border border-[#d4d4d4]">
-                          <button
-                            onClick={() => handleQuestionCountChange(qt.id, -1)}
-                            className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
-                          >
-                            −
-                          </button>
-                          <span className="mx-4 font-bold text-[#303030] min-w-[20px] text-center">
-                            {qt.count}
-                          </span>
-                          <button
-                            onClick={() => handleQuestionCountChange(qt.id, 1)}
-                            className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
-                          >
-                            +
-                          </button>
-                        </div>
+                        {/* Difficulty Dropdown */}
+                        <select
+                          value={qt.difficulty}
+                          onChange={(e) => {
+                            setQuestionTypes(
+                              questionTypes.map((q) =>
+                                q.id === qt.id
+                                  ? { ...q, difficulty: e.target.value as QuestionType["difficulty"] }
+                                  : q
+                              )
+                            );
+                          }}
+                          className="px-3 py-2 bg-white border border-[#d4d4d4] rounded-lg text-[#303030] text-sm focus:outline-none focus:border-[#303030]"
+                        >
+                          <option value="Easy">Easy</option>
+                          <option value="Moderate">Moderate</option>
+                          <option value="Hard">Hard</option>
+                        </select>
+
+                        {/* Remove Button */}
+                        <button
+                          onClick={() => removeQuestionType(qt.id)}
+                          className="p-2 text-[#a9a9a9] hover:text-red-500 transition-colors"
+                          title="Remove question type"
+                        >
+                          <X size={20} />
+                        </button>
                       </div>
 
-                      {/* Marks */}
-                      <div className="flex flex-col items-center gap-2">
-                        <label className="text-xs font-bold text-[#303030]">
-                          Marks
-                        </label>
-                        <div className="flex items-center bg-white rounded-full px-2 py-1 border border-[#d4d4d4]">
-                          <button
-                            onClick={() => handleMarksChange(qt.id, -1)}
-                            className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
-                          >
-                            −
-                          </button>
-                          <span className="mx-4 font-bold text-[#303030] min-w-[20px] text-center">
-                            {qt.marks}
-                          </span>
-                          <button
-                            onClick={() => handleMarksChange(qt.id, 1)}
-                            className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
-                          >
-                            +
-                          </button>
+                      {/* Bottom Row: Count and Marks */}
+                      <div className="flex gap-3">
+                        {/* Number of Questions */}
+                        <div className="flex-1 flex flex-col items-center gap-2">
+                          <label className="text-xs font-bold text-[#303030]">
+                            No. of Questions
+                          </label>
+                          <div className="flex items-center bg-white rounded-full px-2 py-1 border border-[#d4d4d4] w-full justify-between">
+                            <button
+                              onClick={() => handleQuestionCountChange(qt.id, -1)}
+                              className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
+                            >
+                              −
+                            </button>
+                            <span className="font-bold text-[#303030]">
+                              {qt.count}
+                            </span>
+                            <button
+                              onClick={() => handleQuestionCountChange(qt.id, 1)}
+                              className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Marks Per Question */}
+                        <div className="flex-1 flex flex-col items-center gap-2">
+                          <label className="text-xs font-bold text-[#303030]">
+                            Marks per Q
+                          </label>
+                          <div className="flex items-center bg-white rounded-full px-2 py-1 border border-[#d4d4d4] w-full justify-between">
+                            <button
+                              onClick={() => handleMarksChange(qt.id, -1)}
+                              className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
+                            >
+                              −
+                            </button>
+                            <span className="font-bold text-[#303030]">
+                              {qt.marks}
+                            </span>
+                            <button
+                              onClick={() => handleMarksChange(qt.id, 1)}
+                              className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Total Marks Display */}
+                        <div className="flex-1 flex flex-col items-center gap-2">
+                          <label className="text-xs font-bold text-[#303030]">
+                            Total Marks
+                          </label>
+                          <div className="flex items-center justify-center px-4 py-2 bg-white rounded-lg border border-[#d4d4d4] h-[36px]">
+                            <span className="font-bold text-[#303030]">
+                              {qt.count * qt.marks}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
