@@ -8,7 +8,6 @@ import { getApiUrl } from "@/lib/api-config";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
   const [hasLatest, setHasLatest] = useState(false);
 
   useEffect(() => {
@@ -36,7 +35,7 @@ export default function DashboardPage() {
         console.error("Failed to check latest assignment", err);
         setHasLatest(false);
       } finally {
-        if (mounted) setLoading(false);
+        /* noop */
       }
     };
 
