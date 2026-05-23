@@ -236,6 +236,7 @@ export interface AssignmentResponse {
     grade: string;
     instructions?: string;
     sections: InputSection[];
+    uploadedFile?: UploadedFile;
   };
 }
 

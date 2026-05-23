@@ -512,6 +512,54 @@ router.get("/stats", async (_req, res, next) => {
 });
 
 /**
+ * GET /api/assessment/latest
+ * Returns the most recent assignment (if any) - used by frontend dashboard
+ */
+// @ts-expect-error - Express handler typing
+router.get("/latest", async (_req, res, next) => {
+  try {
+    logger.info("GET /assessment/latest");
+    const recent = await findRecent(1);
+    if (!recent || recent.length === 0) {
+      return res.status(204).json({});
+    }
+
+    const a = recent[0];
+    const response: any = {
+      jobId: a.jobId,
+      status: a.status,
+      progress: a.progress,
+      createdAt: a.createdAt,
+      updatedAt: a.updatedAt,
+    };
+
+    if (a.status === "done" && a.output) {
+      response.result = {
+        sections: a.output.sections,
+        totalQuestions: a.output.totalQuestions,
+        totalMarks: a.output.totalMarks,
+        pdfPath: a.output.pdfPath,
+        generatedAt: a.output.generatedAt,
+      };
+      response.downloadUrl = `/api/assessment/download/${a.jobId}`;
+    }
+
+    response.input = {
+      title: a.input.title,
+      subject: a.input.subject,
+      grade: a.input.grade,
+      instructions: a.input.instructions,
+      sections: a.input.sections,
+      uploadedFile: a.input.uploadedFile || undefined,
+    };
+
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/assessment/cost-projection
  * Calculate cost projections for scaling from current to target user base
  * Returns detailed breakdown of monthly costs and savings with caching benefits
