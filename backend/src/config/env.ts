@@ -19,7 +19,16 @@ const envSchema = z.object({
     .url("MONGODB_URI must be a valid MongoDB connection string"),
 
   // Cache & Queue Configuration
-  REDIS_URL: z.string().url("REDIS_URL must be a valid Redis connection URL"),
+  REDIS_URL: z
+    .string()
+    .refine(
+      (url) =>
+        url.startsWith("redis://") ||
+        url.startsWith("rediss://"),
+      {
+        message: "REDIS_URL must be a valid Redis connection URL (redis:// or rediss://)",
+      }
+    ),
 
   // LLM API Keys
   GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY is required"),
