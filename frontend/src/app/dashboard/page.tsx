@@ -8,7 +8,7 @@ import { getApiUrl } from "@/lib/api-config";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [hasLatest, setHasLatest] = useState(false);
+  // no local state required; we'll redirect if latest exists
 
   useEffect(() => {
     let mounted = true;
@@ -18,7 +18,7 @@ export default function DashboardPage() {
         const res = await fetch(`${getApiUrl()}/api/assessment/latest`);
         if (!mounted) return;
         if (res.status === 204) {
-          setHasLatest(false);
+          // no recent assignment
         } else if (res.ok) {
           const data = await res.json();
           if (data?.jobId) {
@@ -26,10 +26,10 @@ export default function DashboardPage() {
             router.push(`/output/${data.jobId}`);
             return;
           } else {
-            setHasLatest(false);
+            // no recent assignment
           }
         } else {
-          setHasLatest(false);
+          // no recent assignment
         }
       } catch (err) {
         console.error("Failed to check latest assignment", err);
