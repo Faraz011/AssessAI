@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-white text-gray-900;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print styles */
+@media print {
+  body {
+    @apply bg-white;
+  }
+
+  header {
+    @apply hidden;
+  }
+
+  .print\:hidden {
+    @apply hidden;
+  }
+
+  .no-print {
+    @apply hidden;
+  }
+
+  @page {
+    margin: 0.5in;
+  }
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom focus styles */
+:focus {
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  @apply ring-2 ring-purple-500 ring-offset-0;
+}
+
+/* Form elements */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+textarea,
+select {
+  @apply bg-white border border-gray-300 text-gray-900 rounded-lg px-4 py-2;
+  @apply transition duration-200 ease-in-out;
+  @apply focus:ring-2 focus:ring-purple-500 focus:border-transparent;
+}
+
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder,
+textarea::placeholder {
+  @apply text-gray-400;
+}
+
+/* Checkbox and radio customization */
+input[type="checkbox"],
+input[type="radio"] {
+  @apply w-4 h-4 text-purple-600 rounded border-gray-300;
+  @apply cursor-pointer;
+  @apply focus:ring-2 focus:ring-purple-500;
+}
+
+/* Button base styles */
+button {
+  @apply transition duration-200 ease-in-out;
+}
+
+button:focus {
+  @apply outline-none;
+}
+
+/* Links */
+a {
+  @apply transition duration-200 ease-in-out;
+}
+
+/* Cards */
+.card {
+  @apply bg-white rounded-lg border border-gray-200 shadow-sm;
+  @apply hover:shadow-md transition duration-200;
+}
+
+/* Badges */
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply inline-block w-4 h-4 border-2 border-transparent border-t-current rounded-full animate-spin;
+}
+
+/* Utility classes for purple gradient */
+.bg-purple-gradient {
+  @apply bg-gradient-to-r from-purple-600 to-purple-700;
+}
+
+.text-purple-gradient {
+  @apply bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent;
+}
