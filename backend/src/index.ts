@@ -27,7 +27,12 @@ function initializeApp(httpServer: any): Express {
 
   // Middleware
   app.use(helmet());
-  app.use(cors({ origin: env.CORS_ORIGIN }));
+  app.use(
+    cors({
+      origin: env.CORS_ORIGIN.split(",").map((o) => o.trim()),
+      credentials: true,
+    })
+  );
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ limit: "10mb", extended: true }));
 

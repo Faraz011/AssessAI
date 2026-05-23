@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { TrendingDown, DollarSign, Users, Zap } from "lucide-react";
+import { getApiUrl } from "@/lib/api-config";
 
 interface CostProjection {
   scenario: {
@@ -44,7 +45,7 @@ export default function StatsPage() {
     const fetchData = async () => {
       try {
         const response = await fetch(
-          "http://localhost:4000/api/assessment/cost-projection",
+          `${getApiUrl()}/api/assessment/cost-projection`,
         );
         if (!response.ok) throw new Error("Failed to fetch cost projection");
         const json = await response.json();

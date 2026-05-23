@@ -6,6 +6,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import JobStatus from "@/components/JobStatus";
 import { AssignmentResponse } from "@/types";
+import { getApiUrl } from "@/lib/api-config";
 
 export default function OutputPage() {
   const params = useParams();
@@ -27,7 +28,7 @@ export default function OutputPage() {
     try {
       setIsDownloading(true);
       const response = await fetch(
-        `http://localhost:4000/api/assessment/download/${jobId}`,
+        `${getApiUrl()}/api/assessment/download/${jobId}`,
       );
       if (!response.ok) throw new Error("Download failed");
 

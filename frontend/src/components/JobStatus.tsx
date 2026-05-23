@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, Zap, Clock, CheckCircle2, RotateCw } from "lucide-react";
 import { AssignmentResponse } from "@/types";
+import { getApiUrl, getWsUrl } from "@/lib/api-config";
 
 interface JobStatusProps {
   jobId: string;
@@ -26,7 +27,7 @@ export default function JobStatus({
     const fetchStatus = async () => {
       try {
         const response = await fetch(
-          `http://localhost:4000/api/assessment/status/${jobId}`,
+          `${getApiUrl()}/api/assessment/status/${jobId}`,
         );
         if (!response.ok) throw new Error("Failed to fetch status");
         const data = await response.json();
@@ -50,7 +51,7 @@ export default function JobStatus({
   useEffect(() => {
     const connectWebSocket = () => {
       try {
-        const wsUrl = `ws://localhost:4000/ws?jobId=${jobId}`;
+        const wsUrl = `${getWsUrl()}/ws?jobId=${jobId}`;
         const websocket = new WebSocket(wsUrl);
 
         websocket.onopen = () => {
@@ -306,7 +307,7 @@ export default function JobStatus({
           <a
             href={
               status.downloadUrl ||
-              `http://localhost:4000/api/assessment/download/${jobId}`
+              `${getApiUrl()}/api/assessment/download/${jobId}`
             }
             download
             className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 rounded-lg transition text-center"

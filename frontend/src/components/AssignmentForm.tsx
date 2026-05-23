@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Upload, X, Loader2 } from "lucide-react";
+import { getApiUrl } from "@/lib/api-config";
 
 export default function AssignmentForm() {
   const router = useRouter();
@@ -99,7 +100,7 @@ export default function AssignmentForm() {
       formData.append("numQuestions[sectionC]", data.sectionC);
 
       const response = await fetch(
-        "http://localhost:4000/api/assessment/create",
+        `${getApiUrl()}/api/assessment/create`,
         {
           method: "POST",
           body: formData,

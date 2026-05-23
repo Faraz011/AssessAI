@@ -52,8 +52,8 @@ const envSchema = z.object({
     .pipe(z.coerce.number().positive().int())
     .default("20"),
 
-  // CORS Configuration
-  CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  // CORS Configuration (comma-separated list of allowed origins)
+  CORS_ORIGIN: z.string().default("http://localhost:3000,http://localhost:3001"),
 
   // Logging Configuration
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),

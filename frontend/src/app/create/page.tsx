@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
+import { getApiUrl } from "@/lib/api-config";
 
 type QuestionType = {
   id: string;
@@ -116,7 +117,7 @@ export default function CreateAssignment() {
       }
 
       const response = await fetch(
-        "http://localhost:4000/api/assessment/create",
+        `${getApiUrl()}/api/assessment/create`,
         {
           method: "POST",
           body: formData,
