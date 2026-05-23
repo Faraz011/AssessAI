@@ -692,4 +692,47 @@ router.get("/cost-projection", async (_req, res, next) => {
   }
 });
 
+/**
+ * DELETE /api/assessment/:jobId
+ * Delete an assignment and associated files
+ */
+// @ts-expect-error - Express handler typing
+router.delete("/:jobId", async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    logger.info("DELETE /assessment", { jobId });
+
+    const assignment = await getAssignment(jobId);
+
+    if (!assignment) {
+      return res.status(404).json({ error: "Assignment not found" });
+    }
+
+    // Delete associated files
+    if (assignment.output?.pdfPath) {
+      try {
+        await fsPromises.unlink(assignment.output.pdfPath).catch(() => {});
+      } catch (error) {
+        logger.warn("Failed to delete PDF file:", error);
+      }
+    }
+
+    if (assignment.input?.uploadedFile?.storedPath) {
+      try {
+        await fsPromises.unlink(assignment.input.uploadedFile.storedPath).catch(() => {});
+      } catch (error) {
+        logger.warn("Failed to delete uploaded file:", error);
+      }
+    }
+
+    // Delete from database
+    await Assignment.deleteOne({ jobId });
+    logger.info("Assignment deleted", { jobId });
+
+    res.json({ message: "Assignment deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
