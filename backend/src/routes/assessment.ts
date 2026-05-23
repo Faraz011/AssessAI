@@ -86,18 +86,11 @@ router.post("/create", upload.single("file"), async (req, res, next) => {
       grade,
       numQuestions,
       questionTypes,
+      sections,
       subject,
       dueDate,
       instructions,
     } = req.body;
-
-    const parsedNumQuestions = parseFormValue<{
-      sectionA?: unknown;
-      sectionB?: unknown;
-      sectionC?: unknown;
-    }>(numQuestions);
-    const parsedQuestionTypes =
-      parseFormValue<AssignmentInput["questionTypes"]>(questionTypes);
 
     if (!title || typeof title !== "string") {
       return res
@@ -111,38 +104,88 @@ router.post("/create", upload.single("file"), async (req, res, next) => {
         .json({ error: "grade is required and must be a string" });
     }
 
-    if (!parsedNumQuestions || typeof parsedNumQuestions !== "object") {
-      return res
-        .status(400)
-        .json({ error: "numQuestions is required and must be an object" });
+    // Try to parse sections from new format first
+    let parsedSections: InputSection[] | undefined;
+    if (sections) {
+      try {
+        const sectionsData = parseFormValue<InputSection[]>(sections);
+        if (Array.isArray(sectionsData) && sectionsData.length > 0) {
+          parsedSections = sectionsData;
+        }
+      } catch (error) {
+        logger.warn("Failed to parse sections from new format", error);
+      }
     }
 
-    // Parse numQuestions
-    let sectionA = 5,
-      sectionB = 5,
-      sectionC = 5;
-    if (parsedNumQuestions) {
-      const nextSectionA = Number(parsedNumQuestions.sectionA);
-      const nextSectionB = Number(parsedNumQuestions.sectionB);
-      const nextSectionC = Number(parsedNumQuestions.sectionC);
+    // Fallback to old format if sections not provided
+    if (!parsedSections) {
+      const parsedNumQuestions = parseFormValue<{
+        sectionA?: unknown;
+        sectionB?: unknown;
+        sectionC?: unknown;
+      }>(numQuestions);
+      const parsedQuestionTypes =
+        parseFormValue<AssignmentInput["questionTypes"]>(questionTypes);
 
-      if (Number.isFinite(nextSectionA)) sectionA = nextSectionA;
-      if (Number.isFinite(nextSectionB)) sectionB = nextSectionB;
-      if (Number.isFinite(nextSectionC)) sectionC = nextSectionC;
-    }
+      if (!parsedNumQuestions || typeof parsedNumQuestions !== "object") {
+        return res
+          .status(400)
+          .json({ error: "sections or numQuestions is required" });
+      }
 
-    // Validate section counts
-    if (
-      sectionA < 1 ||
-      sectionA > 50 ||
-      sectionB < 1 ||
-      sectionB > 50 ||
-      sectionC < 1 ||
-      sectionC > 50
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Section counts must be between 1 and 50" });
+      // Parse numQuestions from old format
+      let sectionA = 5,
+        sectionB = 5,
+        sectionC = 5;
+      if (parsedNumQuestions) {
+        const nextSectionA = Number(parsedNumQuestions.sectionA);
+        const nextSectionB = Number(parsedNumQuestions.sectionB);
+        const nextSectionC = Number(parsedNumQuestions.sectionC);
+
+        if (Number.isFinite(nextSectionA)) sectionA = nextSectionA;
+        if (Number.isFinite(nextSectionB)) sectionB = nextSectionB;
+        if (Number.isFinite(nextSectionC)) sectionC = nextSectionC;
+      }
+
+      // Validate section counts
+      if (
+        sectionA < 1 ||
+        sectionA > 50 ||
+        sectionB < 1 ||
+        sectionB > 50 ||
+        sectionC < 1 ||
+        sectionC > 50
+      ) {
+        return res
+          .status(400)
+          .json({ error: "Section counts must be between 1 and 50" });
+      }
+
+      // Build sections array from old format
+      parsedSections = [
+        {
+          name: "Section A",
+          count: sectionA,
+          marksPerQ: 2,
+          difficulty: "Easy",
+          type: (parsedQuestionTypes?.[0] || "MCQ") as InputSection["type"],
+        },
+        {
+          name: "Section B",
+          count: sectionB,
+          marksPerQ: 3,
+          difficulty: "Moderate",
+          type: (parsedQuestionTypes?.[1] ||
+            "ShortAnswer") as InputSection["type"],
+        },
+        {
+          name: "Section C",
+          count: sectionC,
+          marksPerQ: 5,
+          difficulty: "Hard",
+          type: (parsedQuestionTypes?.[2] || "LongAnswer") as InputSection["type"],
+        },
+      ];
     }
 
     // Process file if uploaded
@@ -178,32 +221,33 @@ router.post("/create", upload.single("file"), async (req, res, next) => {
       }
     }
 
-    // Build sections array
-    const sections: InputSection[] = [
-      {
-        name: "Section A",
-        count: sectionA,
-        marksPerQ: 2,
-        difficulty: "Easy",
-        type: (parsedQuestionTypes?.[0] || "MCQ") as InputSection["type"],
-      },
-      {
-        name: "Section B",
-        count: sectionB,
-        marksPerQ: 3,
-        difficulty: "Moderate",
-        type: (parsedQuestionTypes?.[1] ||
-          "ShortAnswer") as InputSection["type"],
-      },
-      {
-        name: "Section C",
-        count: sectionC,
-        marksPerQ: 5,
-        difficulty: "Hard",
-        type: (parsedQuestionTypes?.[2] ||
-          "LongAnswer") as InputSection["type"],
-      },
-    ];
+    // Validate parsedSections (user-provided marking scheme)
+    const invalidSection = parsedSections.find((s) => {
+      if (!s || typeof s !== "object") return true;
+      if (!s.name || typeof s.name !== "string") return true;
+      const count = Number(s.count);
+      const marks = Number(s.marksPerQ);
+      if (!Number.isFinite(count) || count < 1 || count > 50) return true;
+      if (!Number.isFinite(marks) || marks < 1 || marks > 20) return true;
+      if (!["Easy", "Moderate", "Hard"].includes(s.difficulty)) return true;
+      if (!["MCQ", "ShortAnswer", "LongAnswer", "TrueFalse", "FillInTheBlank"].includes(s.type)) return true;
+      if (s.instruction && typeof s.instruction !== "string") return true;
+      return false;
+    });
+
+    if (invalidSection) {
+      return res.status(400).json({ error: "Invalid section configuration provided" });
+    }
+
+    // Compute totals for sanity checks
+    const totalQuestionsProvided = parsedSections.reduce((sum, s) => sum + Number(s.count || 0), 0);
+    const totalMarksProvided = parsedSections.reduce((sum, s) => sum + Number(s.count || 0) * Number(s.marksPerQ || 0), 0);
+
+    logger.debug("Parsed sections totals", { totalQuestionsProvided, totalMarksProvided });
+
+    if (totalQuestionsProvided < 1) {
+      return res.status(400).json({ error: "At least one question must be requested" });
+    }
 
     // Create assignment input
     const assignmentInput: AssignmentInput = {
@@ -211,10 +255,8 @@ router.post("/create", upload.single("file"), async (req, res, next) => {
       subject: subject || undefined,
       grade,
       dueDate: dueDate ? new Date(dueDate) : undefined,
-      questionTypes: parsedQuestionTypes || [
-        "MCQ" as AssignmentInput["questionTypes"][number],
-      ],
-      sections,
+      questionTypes: parsedSections.map((s) => s.type),
+      sections: parsedSections,
       instructions: instructions || undefined,
       uploadedFile: uploadedFileData || undefined,
     };
@@ -223,16 +265,20 @@ router.post("/create", upload.single("file"), async (req, res, next) => {
     const assignment = await createAssignment(assignmentInput);
     logger.info("Assignment created", { jobId: assignment.jobId });
 
-    // Prepare queue job
+    // Prepare queue job using parsedSections
+    const totalQuestions = parsedSections.reduce((sum, s) => sum + Number(s.count || 0), 0);
+    const inferredQuestionTypes = parsedSections.map((s) => s.type);
+
     const jobData: QuestionGenerationJobData = {
       jobId: assignment.jobId,
       title,
       subject: subject || undefined,
       grade,
-      numQuestions: sectionA + sectionB + sectionC,
-      questionTypes: parsedQuestionTypes || ["MCQ"],
+      numQuestions: totalQuestions,
+      questionTypes: inferredQuestionTypes.length > 0 ? inferredQuestionTypes : ["MCQ"],
       instructions: instructions || undefined,
       fileContent: uploadedFileData?.parsedText || undefined,
+      sections: parsedSections,
     };
 
     // Enqueue job
