@@ -22,6 +22,9 @@ export async function connectRedis(): Promise<RedisClient> {
   try {
     logger.info(`Connecting to Redis: ${env.REDIS_URL.substring(0, 30)}...`);
 
+    // Determine if TLS should be used based on protocol
+    const useTLS = env.REDIS_URL.startsWith("rediss://");
+
     redisClient = new Redis(env.REDIS_URL, {
       // Connection settings
       connectTimeout: 10000,
@@ -41,8 +44,8 @@ export async function connectRedis(): Promise<RedisClient> {
       // Command timeout
       commandTimeout: 5000,
 
-      // TLS if needed (can be enabled via env)
-      // tls: { rejectUnauthorized: false },
+      // TLS for secure connections (Upstash rediss://)
+      ...(useTLS && { tls: { rejectUnauthorized: false } }),
     });
 
     // Set up event listeners
