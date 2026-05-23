@@ -561,6 +561,51 @@ router.get("/latest", async (_req, res, next) => {
 });
 
 /**
+ * GET /api/assessment
+ * List recent assignments (optional: ?limit=20)
+ */
+// @ts-expect-error - Express handler typing
+router.get("/", async (req, res, next) => {
+  try {
+    logger.info("GET /assessment list", { query: req.query });
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const items = await findRecent(limit);
+
+    const response = items.map((a) => {
+      const out: any = {
+        jobId: a.jobId,
+        status: a.status,
+        progress: a.progress,
+        createdAt: a.createdAt,
+        updatedAt: a.updatedAt,
+        input: {
+          title: a.input.title,
+          subject: a.input.subject,
+          grade: a.input.grade,
+          sections: a.input.sections,
+          uploadedFile: a.input.uploadedFile || undefined,
+        },
+      };
+
+      if (a.status === "done" && a.output) {
+        out.result = {
+          totalQuestions: a.output.totalQuestions,
+          totalMarks: a.output.totalMarks,
+          pdfPath: a.output.pdfPath,
+        };
+        out.downloadUrl = `/api/assessment/download/${a.jobId}`;
+      }
+
+      return out;
+    });
+
+    res.json({ items: response });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/assessment/cost-projection
  * Calculate cost projections for scaling from current to target user base
  * Returns detailed breakdown of monthly costs and savings with caching benefits
