@@ -115,7 +115,7 @@ export default function OutputPage() {
                       {isDownloading ? "Downloading..." : "Download PDF"}
                     </button>
 
-                    {assignment.input?.uploadedFile && (
+                    {(assignment?.input as any)?.uploadedFile && (
                       <a href={`${getApiUrl()}/api/assessment/file/${jobId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/30 text-white hover:bg-white/5">View Uploaded</a>
                     )}
                   </div>
