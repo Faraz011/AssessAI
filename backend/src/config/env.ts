@@ -22,12 +22,11 @@ const envSchema = z.object({
   REDIS_URL: z
     .string()
     .refine(
-      (url) =>
-        url.startsWith("redis://") ||
-        url.startsWith("rediss://"),
+      (url) => url.startsWith("redis://") || url.startsWith("rediss://"),
       {
-        message: "REDIS_URL must be a valid Redis connection URL (redis:// or rediss://)",
-      }
+        message:
+          "REDIS_URL must be a valid Redis connection URL (redis:// or rediss://)",
+      },
     ),
 
   // LLM API Keys
@@ -53,7 +52,9 @@ const envSchema = z.object({
     .default("20"),
 
   // CORS Configuration (comma-separated list of allowed origins)
-  CORS_ORIGIN: z.string().default("http://localhost:3000,http://localhost:3001"),
+  CORS_ORIGIN: z
+    .string()
+    .default("http://localhost:3000,http://localhost:3001"),
 
   // Logging Configuration
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
