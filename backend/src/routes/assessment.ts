@@ -184,7 +184,8 @@ router.post("/create", upload.single("file"), async (req, res, next) => {
           count: sectionC,
           marksPerQ: 5,
           difficulty: "Hard",
-          type: (parsedQuestionTypes?.[2] || "LongAnswer") as InputSection["type"],
+          type: (parsedQuestionTypes?.[2] ||
+            "LongAnswer") as InputSection["type"],
         },
       ];
     }
@@ -231,23 +232,45 @@ router.post("/create", upload.single("file"), async (req, res, next) => {
       if (!Number.isFinite(count) || count < 1 || count > 50) return true;
       if (!Number.isFinite(marks) || marks < 1 || marks > 20) return true;
       if (!["Easy", "Moderate", "Hard"].includes(s.difficulty)) return true;
-      if (!["MCQ", "ShortAnswer", "LongAnswer", "TrueFalse", "FillInTheBlank"].includes(s.type)) return true;
+      if (
+        ![
+          "MCQ",
+          "ShortAnswer",
+          "LongAnswer",
+          "TrueFalse",
+          "FillInTheBlank",
+        ].includes(s.type)
+      )
+        return true;
       if (s.instruction && typeof s.instruction !== "string") return true;
       return false;
     });
 
     if (invalidSection) {
-      return res.status(400).json({ error: "Invalid section configuration provided" });
+      return res
+        .status(400)
+        .json({ error: "Invalid section configuration provided" });
     }
 
     // Compute totals for sanity checks
-    const totalQuestionsProvided = parsedSections.reduce((sum, s) => sum + Number(s.count || 0), 0);
-    const totalMarksProvided = parsedSections.reduce((sum, s) => sum + Number(s.count || 0) * Number(s.marksPerQ || 0), 0);
+    const totalQuestionsProvided = parsedSections.reduce(
+      (sum, s) => sum + Number(s.count || 0),
+      0,
+    );
+    const totalMarksProvided = parsedSections.reduce(
+      (sum, s) => sum + Number(s.count || 0) * Number(s.marksPerQ || 0),
+      0,
+    );
 
-    logger.debug("Parsed sections totals", { totalQuestionsProvided, totalMarksProvided });
+    logger.debug("Parsed sections totals", {
+      totalQuestionsProvided,
+      totalMarksProvided,
+    });
 
     if (totalQuestionsProvided < 1) {
-      return res.status(400).json({ error: "At least one question must be requested" });
+      return res
+        .status(400)
+        .json({ error: "At least one question must be requested" });
     }
 
     // Create assignment input
@@ -267,7 +290,10 @@ router.post("/create", upload.single("file"), async (req, res, next) => {
     logger.info("Assignment created", { jobId: assignment.jobId });
 
     // Prepare queue job using parsedSections
-    const totalQuestions = parsedSections.reduce((sum, s) => sum + Number(s.count || 0), 0);
+    const totalQuestions = parsedSections.reduce(
+      (sum, s) => sum + Number(s.count || 0),
+      0,
+    );
     const inferredQuestionTypes = parsedSections.map((s) => s.type);
 
     const jobData: QuestionGenerationJobData = {
@@ -276,7 +302,8 @@ router.post("/create", upload.single("file"), async (req, res, next) => {
       subject: subject || undefined,
       grade,
       numQuestions: totalQuestions,
-      questionTypes: inferredQuestionTypes.length > 0 ? inferredQuestionTypes : ["MCQ"],
+      questionTypes:
+        inferredQuestionTypes.length > 0 ? inferredQuestionTypes : ["MCQ"],
       instructions: instructions || undefined,
       fileContent: uploadedFileData?.parsedText || undefined,
       sections: parsedSections,
@@ -442,10 +469,13 @@ router.get("/file/:jobId", async (_req, res, next) => {
       return;
     }
 
-    res.setHeader("Content-Type", uploaded.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Type",
+      uploaded.mimeType || "application/octet-stream",
+    );
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${uploaded.filename.replace(/"/g, "\"")}"`,
+      `attachment; filename="${uploaded.filename.replace(/"/g, '"')}"`,
     );
 
     const stream = fs.createReadStream(filePath);
@@ -719,7 +749,9 @@ router.delete("/:jobId", async (req, res, next) => {
 
     if (assignment.input?.uploadedFile?.storedPath) {
       try {
-        await fsPromises.unlink(assignment.input.uploadedFile.storedPath).catch(() => {});
+        await fsPromises
+          .unlink(assignment.input.uploadedFile.storedPath)
+          .catch(() => {});
       } catch (error) {
         logger.warn("Failed to delete uploaded file:", error);
       }
