@@ -25,10 +25,38 @@ export default function CreateAssignment() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [questionTypes, setQuestionTypes] = useState<QuestionType[]>([
-    { id: "1", name: "Multiple Choice Questions", count: 4, marks: 1, type: "MCQ", difficulty: "Easy" },
-    { id: "2", name: "Short Questions", count: 3, marks: 2, type: "ShortAnswer", difficulty: "Moderate" },
-    { id: "3", name: "Diagram/Graph-Based Questions", count: 5, marks: 5, type: "LongAnswer", difficulty: "Hard" },
-    { id: "4", name: "Numerical Problems", count: 5, marks: 5, type: "ShortAnswer", difficulty: "Moderate" },
+    {
+      id: "1",
+      name: "Multiple Choice Questions",
+      count: 4,
+      marks: 1,
+      type: "MCQ",
+      difficulty: "Easy",
+    },
+    {
+      id: "2",
+      name: "Short Questions",
+      count: 3,
+      marks: 2,
+      type: "ShortAnswer",
+      difficulty: "Moderate",
+    },
+    {
+      id: "3",
+      name: "Diagram/Graph-Based Questions",
+      count: 5,
+      marks: 5,
+      type: "LongAnswer",
+      difficulty: "Hard",
+    },
+    {
+      id: "4",
+      name: "Numerical Problems",
+      count: 5,
+      marks: 5,
+      type: "ShortAnswer",
+      difficulty: "Moderate",
+    },
   ]);
 
   const totalQuestions = questionTypes.reduce((sum, qt) => sum + qt.count, 0);
@@ -68,7 +96,14 @@ export default function CreateAssignment() {
       Math.max(...questionTypes.map((qt) => parseInt(qt.id)), 0) + 1;
     setQuestionTypes([
       ...questionTypes,
-      { id: newId.toString(), name: "New Question Type", count: 0, marks: 1, type: "ShortAnswer", difficulty: "Moderate" },
+      {
+        id: newId.toString(),
+        name: "New Question Type",
+        count: 0,
+        marks: 1,
+        type: "ShortAnswer",
+        difficulty: "Moderate",
+      },
     ]);
   };
 
@@ -96,7 +131,7 @@ export default function CreateAssignment() {
       const formData = new FormData();
       formData.append("title", title);
       formData.append("grade", grade);
-      
+
       // Send all question types with their custom settings
       formData.append(
         "sections",
@@ -109,8 +144,8 @@ export default function CreateAssignment() {
               marksPerQ: qt.marks,
               type: qt.type,
               difficulty: qt.difficulty,
-            }))
-        )
+            })),
+        ),
       );
 
       if (dueDate) {
@@ -125,13 +160,10 @@ export default function CreateAssignment() {
         formData.append("file", file);
       }
 
-      const response = await fetch(
-        `${getApiUrl()}/api/assessment/create`,
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
+      const response = await fetch(`${getApiUrl()}/api/assessment/create`, {
+        method: "POST",
+        body: formData,
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -329,8 +361,10 @@ export default function CreateAssignment() {
                           onChange={(e) => {
                             setQuestionTypes(
                               questionTypes.map((q) =>
-                                q.id === qt.id ? { ...q, name: e.target.value } : q
-                              )
+                                q.id === qt.id
+                                  ? { ...q, name: e.target.value }
+                                  : q,
+                              ),
                             );
                           }}
                           className="flex-1 px-3 py-2 bg-white border border-[#d4d4d4] rounded-lg text-[#303030] text-sm focus:outline-none focus:border-[#303030]"
@@ -344,9 +378,13 @@ export default function CreateAssignment() {
                             setQuestionTypes(
                               questionTypes.map((q) =>
                                 q.id === qt.id
-                                  ? { ...q, type: e.target.value as QuestionType["type"] }
-                                  : q
-                              )
+                                  ? {
+                                      ...q,
+                                      type: e.target
+                                        .value as QuestionType["type"],
+                                    }
+                                  : q,
+                              ),
                             );
                           }}
                           className="px-3 py-2 bg-white border border-[#d4d4d4] rounded-lg text-[#303030] text-sm focus:outline-none focus:border-[#303030]"
@@ -365,9 +403,13 @@ export default function CreateAssignment() {
                             setQuestionTypes(
                               questionTypes.map((q) =>
                                 q.id === qt.id
-                                  ? { ...q, difficulty: e.target.value as QuestionType["difficulty"] }
-                                  : q
-                              )
+                                  ? {
+                                      ...q,
+                                      difficulty: e.target
+                                        .value as QuestionType["difficulty"],
+                                    }
+                                  : q,
+                              ),
                             );
                           }}
                           className="px-3 py-2 bg-white border border-[#d4d4d4] rounded-lg text-[#303030] text-sm focus:outline-none focus:border-[#303030]"
@@ -396,7 +438,9 @@ export default function CreateAssignment() {
                           </label>
                           <div className="flex items-center bg-white rounded-full px-2 py-1 border border-[#d4d4d4] w-full justify-between">
                             <button
-                              onClick={() => handleQuestionCountChange(qt.id, -1)}
+                              onClick={() =>
+                                handleQuestionCountChange(qt.id, -1)
+                              }
                               className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
                             >
                               −
@@ -405,7 +449,9 @@ export default function CreateAssignment() {
                               {qt.count}
                             </span>
                             <button
-                              onClick={() => handleQuestionCountChange(qt.id, 1)}
+                              onClick={() =>
+                                handleQuestionCountChange(qt.id, 1)
+                              }
                               className="p-1 text-[#a9a9a9] hover:text-[#303030] transition-colors"
                             >
                               +
