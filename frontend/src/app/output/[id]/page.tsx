@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Download } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -15,6 +15,7 @@ export default function OutputPage() {
 
   const [assignment, setAssignment] = useState<AssignmentResponse | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
 
   const handleStatusChange = (status: AssignmentResponse) => {
     setAssignment(status);
@@ -23,6 +24,38 @@ export default function OutputPage() {
   const handleComplete = (result: AssignmentResponse) => {
     setAssignment(result);
   };
+
+  useEffect(() => {
+    let mounted = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const fetchStatus = async () => {
+      try {
+        setIsLoadingStatus(true);
+        const res = await fetch(`${getApiUrl()}/api/assessment/status/${jobId}`);
+        if (!res.ok) throw new Error("Failed to fetch status");
+        const data = (await res.json()) as AssignmentResponse;
+        if (!mounted) return;
+        setAssignment(data);
+
+        if (data.status !== "done" && data.status !== "failed") {
+          timer = setTimeout(fetchStatus, 3000);
+        }
+      } catch (err) {
+        console.error("Status fetch error:", err);
+        if (timer === null) timer = setTimeout(fetchStatus, 5000);
+      } finally {
+        if (mounted) setIsLoadingStatus(false);
+      }
+    };
+
+    fetchStatus();
+
+    return () => {
+      mounted = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [jobId]);
 
   const handleDownload = async () => {
     try {
@@ -77,6 +110,9 @@ export default function OutputPage() {
                 onStatusChange={handleStatusChange}
                 onComplete={handleComplete}
               />
+              {isLoadingStatus && (
+                <p className="text-sm text-[#5e5e5e] mt-2">Checking status...</p>
+              )}
             </div>
           )}
 
@@ -103,6 +139,16 @@ export default function OutputPage() {
                     <Download size={20} />
                     {isDownloading ? "Downloading..." : "Download as PDF"}
                   </button>
+                    {assignment.input?.uploadedFile && (
+                      <a
+                        href={`${getApiUrl()}/api/assessment/file/${jobId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ml-4 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-transparent border border-white text-white hover:bg-white/10"
+                      >
+                        View Uploaded File
+                      </a>
+                    )}
                 </div>
               </div>
             </div>
@@ -222,6 +268,13 @@ export default function OutputPage() {
                     </p>
                   </div>
                 </div>
+                {assignment.metadata && (
+                  <div className="mt-4 text-sm text-[#5e5e5e]">
+                    <p>Model: {assignment.metadata.modelUsed || "n/a"}</p>
+                    <p>Cache hit: {assignment.metadata.cacheHit ? "Yes" : "No"}</p>
+                    <p>Attempts: {assignment.metadata.attempts}</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
