@@ -594,7 +594,6 @@ router.get("/latest", async (_req, res, next) => {
  * GET /api/assessment
  * List recent assignments (optional: ?limit=20)
  */
-// @ts-expect-error - Express handler typing
 router.get("/", async (req, res, next) => {
   try {
     logger.info("GET /assessment list", { query: req.query });
@@ -726,7 +725,6 @@ router.get("/cost-projection", async (_req, res, next) => {
  * DELETE /api/assessment/:jobId
  * Delete an assignment and associated files
  */
-// @ts-expect-error - Express handler typing
 router.delete("/:jobId", async (req, res, next) => {
   try {
     const { jobId } = req.params;
@@ -761,9 +759,9 @@ router.delete("/:jobId", async (req, res, next) => {
     await Assignment.deleteOne({ jobId });
     logger.info("Assignment deleted", { jobId });
 
-    res.json({ message: "Assignment deleted successfully" });
+    return res.json({ message: "Assignment deleted successfully" });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
