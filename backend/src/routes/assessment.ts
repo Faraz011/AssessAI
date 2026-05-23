@@ -410,6 +410,56 @@ router.get("/download/:jobId", async (_req, res, next) => {
 });
 
 /**
+ * GET /api/assessment/file/:jobId
+ * Stream the originally uploaded file (if any) for an assignment
+ */
+router.get("/file/:jobId", async (_req, res, next) => {
+  try {
+    const { jobId } = _req.params;
+    logger.info("GET /assessment/file", { jobId });
+
+    const assignment = await getAssignment(jobId);
+
+    if (!assignment) {
+      res.status(404).json({ error: "Job not found" });
+      return;
+    }
+
+    const uploaded = assignment.input?.uploadedFile;
+    if (!uploaded || !uploaded.storedPath) {
+      res.status(404).json({ error: "No uploaded file for this assignment" });
+      return;
+    }
+
+    // Verify file exists
+    const filePath = uploaded.storedPath;
+    try {
+      await fsPromises.access(filePath);
+    } catch {
+      logger.error("Uploaded file not found:", { filePath, jobId });
+      res.status(404).json({ error: "Uploaded file not found" });
+      return;
+    }
+
+    res.setHeader("Content-Type", uploaded.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${uploaded.filename.replace(/"/g, "\"")}"`,
+    );
+
+    const stream = fs.createReadStream(filePath);
+    stream.on("error", (error: Error) => {
+      logger.error("Error streaming uploaded file:", error);
+      res.status(500).json({ error: "Error streaming file" });
+    });
+
+    stream.pipe(res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/assessment/stats
  * Get aggregate statistics about assessment processing
  */
