@@ -33,7 +33,6 @@ export default function DashboardPage() {
         }
       } catch (err) {
         console.error("Failed to check latest assignment", err);
-        setHasLatest(false);
       } finally {
         /* noop */
       }
