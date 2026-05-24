@@ -92,7 +92,6 @@ export default function DashboardPage() {
           loading={loading}
           onDelete={handleDelete}
           onNavigate={() => setOpenMenuId(null)}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         />
         
         {/* Mobile Sidebar Overlay */}

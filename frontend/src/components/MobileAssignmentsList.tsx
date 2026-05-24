@@ -21,7 +21,6 @@ interface MobileAssignmentsListProps {
   loading: boolean;
   onDelete: (jobId: string) => Promise<void>;
   onNavigate?: () => void;
-  onToggleSidebar?: () => void;
 }
 
 const formatDate = (dateString: string) => {
@@ -41,7 +40,6 @@ export default function MobileAssignmentsList({
   loading,
   onDelete,
   onNavigate,
-  onToggleSidebar,
 }: MobileAssignmentsListProps) {
   const router = useRouter();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
