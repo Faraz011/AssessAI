@@ -18,10 +18,13 @@ import {
   Assignment,
   type AssignmentInput,
   type InputSection,
+  type IAssignment,
 } from "../models/Assignment";
 import { addJob, type QuestionGenerationJobData } from "../queue/producer";
 import { parseFile, isSupportedFileType } from "../services/fileParser";
 import { primaryBreaker } from "../llm/breaker";
+import { routeLLMCall } from "../llm/router";
+import { getRedis } from "../config/redis";
 
 /**
  * Configure multer for file uploads
@@ -797,7 +800,13 @@ type RefinementAction =
 router.post("/:jobId/refine", async (req, res, next) => {
   try {
     const { jobId } = req.params;
-    const { sectionName, questionNumber, action, customInstruction, targetLanguage } = req.body;
+    const {
+      sectionName,
+      questionNumber,
+      action,
+      customInstruction,
+      targetLanguage,
+    } = req.body;
 
     logger.info("POST /assessment/:jobId/refine", {
       jobId,
@@ -812,7 +821,9 @@ router.post("/:jobId/refine", async (req, res, next) => {
     }
 
     if (!Number.isFinite(questionNumber) || questionNumber < 1) {
-      return res.status(400).json({ error: "questionNumber must be a positive integer" });
+      return res
+        .status(400)
+        .json({ error: "questionNumber must be a positive integer" });
     }
 
     const validActions: RefinementAction[] = [
@@ -825,15 +836,23 @@ router.post("/:jobId/refine", async (req, res, next) => {
       "custom",
     ];
     if (!validActions.includes(action)) {
-      return res.status(400).json({ error: `action must be one of: ${validActions.join(", ")}` });
+      return res
+        .status(400)
+        .json({ error: `action must be one of: ${validActions.join(", ")}` });
     }
 
     if (action === "custom" && !customInstruction) {
-      return res.status(400).json({ error: "customInstruction is required when action is 'custom'" });
+      return res
+        .status(400)
+        .json({
+          error: "customInstruction is required when action is 'custom'",
+        });
     }
 
     if (action === "translate" && !["en", "hi"].includes(targetLanguage)) {
-      return res.status(400).json({ error: "targetLanguage must be 'en' or 'hi'" });
+      return res
+        .status(400)
+        .json({ error: "targetLanguage must be 'en' or 'hi'" });
     }
 
     // Load assignment
@@ -847,9 +866,13 @@ router.post("/:jobId/refine", async (req, res, next) => {
     }
 
     // Find section
-    const sectionIndex = assignment.output.sections.findIndex((s) => s.name === sectionName);
+    const sectionIndex = assignment.output.sections.findIndex(
+      (s) => s.name === sectionName,
+    );
     if (sectionIndex === -1) {
-      return res.status(400).json({ error: `Section "${sectionName}" not found` });
+      return res
+        .status(400)
+        .json({ error: `Section "${sectionName}" not found` });
     }
 
     const section = assignment.output.sections[sectionIndex];
@@ -867,6 +890,7 @@ router.post("/:jobId/refine", async (req, res, next) => {
     // Build surgical prompt and call LLM
     const refinedQuestion = await refineQuestion(
       originalQuestion,
+      assignment,
       assignment.input.grade,
       action,
       customInstruction,
@@ -897,7 +921,8 @@ router.post("/:jobId/refine", async (req, res, next) => {
     };
 
     // Update section with new question
-    assignment.output.sections[sectionIndex].questions[questionIndex] = refinedQuestion;
+    assignment.output.sections[sectionIndex].questions[questionIndex] =
+      refinedQuestion;
 
     // Track edit history (max 100 edits per paper)
     const editHistory = (assignment as any).edit_history || [];
@@ -918,7 +943,11 @@ router.post("/:jobId/refine", async (req, res, next) => {
       },
     );
 
-    logger.info("Question refined and saved", { jobId, sectionName, questionNumber });
+    logger.info("Question refined and saved", {
+      jobId,
+      sectionName,
+      questionNumber,
+    });
 
     // Notify clients via WebSocket
     try {
@@ -991,11 +1020,14 @@ router.post("/:jobId/undo", async (req, res, next) => {
     // Pop the last edit
     const lastEdit = editHistory.pop();
     const { sectionName, questionNumber, originalQuestion } = lastEdit;
-    const sectionIndex = assignment.output.sections.findIndex((s) => s.name === sectionName);
+    const sectionIndex = assignment.output.sections.findIndex(
+      (s) => s.name === sectionName,
+    );
     const questionIndex = questionNumber - 1;
 
     if (sectionIndex >= 0 && questionIndex >= 0) {
-      assignment.output.sections[sectionIndex].questions[questionIndex] = originalQuestion;
+      assignment.output.sections[sectionIndex].questions[questionIndex] =
+        originalQuestion;
     }
 
     // Save to database
@@ -1044,6 +1076,7 @@ router.post("/:jobId/undo", async (req, res, next) => {
  */
 async function refineQuestion(
   question: any,
+  assignment: IAssignment,
   grade: string,
   action: RefinementAction,
   customInstruction?: string,
@@ -1052,15 +1085,19 @@ async function refineQuestion(
   const actionPrompts: Record<RefinementAction, string> = {
     simplify:
       "Rewrite this question to be simpler and more straightforward while keeping the same topic and marks.",
-    rephrase: "Rephrase this question using different wording but keep the same meaning and difficulty.",
-    easier: "Rewrite this question to be easier to answer while keeping the same topic and marks.",
-    harder: "Rewrite this question to be more challenging while keeping the same topic and marks.",
+    rephrase:
+      "Rephrase this question using different wording but keep the same meaning and difficulty.",
+    easier:
+      "Rewrite this question to be easier to answer while keeping the same topic and marks.",
+    harder:
+      "Rewrite this question to be more challenging while keeping the same topic and marks.",
     mcq: "Convert this question into a multiple choice question (MCQ) with 4 options. Keep the marks the same.",
     translate: `Translate this question to ${targetLanguage === "hi" ? "Hindi" : "English"}. Keep the marks and difficulty.`,
-    custom: customInstruction || "Modify this question based on the instruction provided.",
+    custom:
+      customInstruction ||
+      "Modify this question based on the instruction provided.",
   };
 
-  const actionDescription = actionPrompts[action];
   // @ts-expect-error - systemPrompt will be used when LLM integration is complete
   const systemPrompt = `You are an expert exam question editor. You refine individual questions for educational assessments. 
 Return ONLY valid JSON matching this schema (no markdown, no explanation):
@@ -1072,40 +1109,96 @@ Return ONLY valid JSON matching this schema (no markdown, no explanation):
   "marks": number
 }`;
 
-  // @ts-expect-error - userPrompt will be used when LLM integration is complete
-  const userPrompt = `Grade: ${grade}
+  // userPrompt removed - build prompt in LLM call section
+
+  try {
+    // Build a prompt for Groq via routeLLMCall
+    const userPrompt = `${userPromptHeader()}
+Grade: ${grade}
 Original Question (${question.type}, ${question.difficulty}, ${question.marks} marks):
 ${question.text}
 ${question.options ? `\nOptions:\n${question.options.map((o: string, i: number) => `${String.fromCharCode(65 + i)}. ${o}`).join("\n")}` : ""}
 
-Action: ${actionDescription}
+Action: ${actionPrompts[action]}
 
-Refined Question:`;
+Return ONLY valid JSON matching this schema:
+{
+  "text": "...",
+  "type": "MCQ|ShortAnswer|LongAnswer|TrueFalse|FillInTheBlank",
+  "options": ["A","B","C","D"],
+  "difficulty": "Easy|Moderate|Hard",
+  "marks": number
+}
+`;
 
-  try {
-    // TODO: Integrate with Anthropic Haiku API or Groq for faster refinement
-    // For now, use mock response for testing
-    logger.warn("refineQuestion: LLM call not yet implemented - using mock response");
-    
-    const refinedJson = JSON.stringify({
-      text: `Refined version of: ${question.text.substring(0, 50)}...`,
-      type: question.type,
-      options: question.options,
-      difficulty: question.difficulty,
-      marks: question.marks,
-    });
+    const numQuestions = assignment?.input?.sections?.reduce(
+      (acc: any, s: any) => {
+        if (s.name === "Section A") acc.sectionA = s.count;
+        if (s.name === "Section B") acc.sectionB = s.count;
+        if (s.name === "Section C") acc.sectionC = s.count;
+        return acc;
+      },
+      { sectionA: 0, sectionB: 0, sectionC: 0 },
+    );
 
-    const parsed = JSON.parse(refinedJson) as any;
+    // Call Groq via router (uses circuit breaker)
+    const llmResp = await routeLLMCall(
+      userPrompt,
+      assignment.input.title,
+      assignment.input.grade,
+      numQuestions,
+    );
 
-    // Ensure number field is preserved
-    return {
+    // Parse content as JSON
+    let parsed: any;
+    try {
+      parsed = JSON.parse(llmResp.content.trim());
+    } catch (err) {
+      logger.error("Failed to parse LLM response as JSON", {
+        content: llmResp.content,
+        error: err,
+      });
+      throw new Error("LLM returned invalid JSON for refined question");
+    }
+
+    // Build refined question with fallbacks
+    const refined = {
       number: question.number,
       text: parsed.text || question.text,
       type: parsed.type || question.type,
-      options: parsed.options,
+      options: parsed.options || question.options,
       difficulty: parsed.difficulty || question.difficulty,
       marks: parsed.marks || question.marks,
-    };
+    } as any;
+
+    // Record model and tokens in meta for analytics
+    try {
+      await Assignment.updateOne(
+        { jobId: assignment.jobId },
+        {
+          $set: { "meta.modelUsed": llmResp.modelUsed },
+          $inc: { "meta.tokensOut": llmResp.tokensUsed || 0 },
+        },
+      );
+    } catch (err) {
+      logger.warn("Failed to update meta tokens/model", err);
+    }
+
+    // Mark a Redis flag to indicate assignment was modified (useful for invalidation)
+    try {
+      const redis = getRedis();
+      if (redis) {
+        await redis.setex(
+          `assignment:modified:${assignment.jobId}`,
+          60 * 60 * 24,
+          new Date().toISOString(),
+        );
+      }
+    } catch (err) {
+      logger.warn("Failed to set Redis modified flag", err);
+    }
+
+    return refined;
   } catch (error) {
     logger.error("Failed to refine question via LLM", {
       error: error instanceof Error ? error.message : String(error),
@@ -1113,6 +1206,11 @@ Refined Question:`;
     });
     throw error;
   }
+}
+
+// Helper to centralize system prompt header
+function userPromptHeader() {
+  return `You are an expert exam question editor. You refine individual questions for educational assessments.`;
 }
 
 export default router;

@@ -128,6 +128,20 @@ export interface IAssignment extends Document {
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
+  // Edit history for per-question refinements
+  edit_history?: EditEntry[];
+}
+
+/**
+ * Edit history entry
+ */
+export interface EditEntry {
+  timestamp: Date;
+  sectionName: string;
+  questionNumber: number;
+  action: string;
+  originalQuestion: GeneratedQuestion;
+  newQuestion: GeneratedQuestion;
 }
 
 /**
@@ -306,6 +320,23 @@ const assignmentSchema = new Schema<IAssignment>(
     output: { type: assignmentOutputSchema },
     meta: { type: processingMetaSchema, required: true },
     errorMessage: { type: String },
+    // Edit history for per-question refinements
+    edit_history: {
+      type: [
+        new Schema<EditEntry>(
+          {
+            timestamp: { type: Date, required: true, default: Date.now },
+            sectionName: { type: String, required: true },
+            questionNumber: { type: Number, required: true, min: 1 },
+            action: { type: String, required: true },
+            originalQuestion: { type: generatedQuestionSchema, required: true },
+            newQuestion: { type: generatedQuestionSchema, required: true },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,
