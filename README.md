@@ -1,4 +1,4 @@
-# VedaAI - Assessment Generation System
+# AssessAI - Assessment Generation System
 
 A production-grade assessment generation system that leverages Large Language Models to automatically create high-quality question papers from uploaded documents.
 
