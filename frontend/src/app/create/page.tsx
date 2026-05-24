@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Menu, Bell } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
+import Sidebar from "@/components/Sidebar";
 import { getApiUrl } from "@/lib/api-config";
 
 type QuestionType = {
@@ -17,6 +18,9 @@ type QuestionType = {
 
 export default function CreateAssignment() {
   const router = useRouter();
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileImage, setProfileImage] = useState("");
   const [title, setTitle] = useState("");
   const [grade, setGrade] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -191,6 +195,248 @@ export default function CreateAssignment() {
     // Go back to dashboard
     router.push("/dashboard");
   };
+
+  useEffect(() => {
+    // Detect mobile and load profile image
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    try {
+      const img = localStorage.getItem("assessai_profileImage");
+      if (img) setProfileImage(img);
+    } catch (e) {
+      /* ignore */
+    }
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Wait for hydration
+  if (isMobile === null) return null;
+
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 bg-[#f0f0f0] flex flex-col overflow-hidden">
+        {/* Top Bar - same as mobile list */}
+        <div className="bg-white flex items-center justify-between pl-3 pr-4 py-4 flex-shrink-0 border-b border-gray-100 rounded-b-4xl">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-7 h-7 rounded-[8px] flex-shrink-0 flex items-center justify-center"
+              style={{
+                background:
+                  "linear-gradient(135deg,#ffb07a 0%,#e56820 50%,#a43a30 100%)",
+              }}
+            >
+              <span className="text-white font-extrabold text-sm">V</span>
+            </div>
+            <span className="text-lg font-bold text-[#303030]" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
+              VedaAI
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button className="bg-[#f6f6f6] rounded-full p-2 flex items-center justify-center hover:bg-gray-200 transition relative flex-shrink-0 w-9 h-9">
+              <Bell className="w-5 h-5 text-[#303030]" />
+            </button>
+
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#FF5623] to-[#FF8A50] flex-shrink-0 overflow-hidden flex items-center justify-center">
+              {profileImage ? (
+                <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white font-bold text-sm">A</span>
+              )}
+            </div>
+
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-gray-100 rounded-md transition flex-shrink-0 flex items-center justify-center">
+              <Menu className="w-6 h-6 text-[#303030]" />
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile content: render the same form but optimized for mobile */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="bg-white rounded-3xl p-6 shadow-lg">
+            {/* Reuse the main content from desktop form - simplified spacing for mobile */}
+            <div className="mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-6 h-6 rounded-full bg-[#22c55e] flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-[#303030]">Create Assignment</h1>
+                  <p className="text-sm text-[#5e5e5e]">Set up a new assignment for your students</p>
+                </div>
+              </div>
+
+              <div className="w-full h-2 bg-[#d4d4d4] rounded-full overflow-hidden">
+                <div className="h-full w-1/3 bg-[#303030] rounded-full" />
+              </div>
+            </div>
+
+            {/* The rest of the form - reuse existing inputs but with tighter spacing */}
+            <div>
+              {/* Title */}
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-[#303030] mb-2">Assignment Title <span className="text-red-500">*</span></label>
+                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., CBSE Grade 8 Science Midterm Exam" className="w-full px-3 py-2 border-2 border-[#d4d4d4] rounded-lg text-[#303030] placeholder-[#a9a9a9] focus:outline-none" />
+              </div>
+
+              {/* Grade & file simplified */}
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-[#303030] mb-2">Grade Level <span className="text-red-500">*</span></label>
+                <select value={grade} onChange={(e) => setGrade(e.target.value)} className="w-full px-3 py-2 border-2 border-[#d4d4d4] rounded-lg text-[#303030] focus:outline-none">
+                  <option value="">Select Grade</option>
+                  <option value="Grade 1">Grade 1</option>
+                  <option value="Grade 2">Grade 2</option>
+                  <option value="Grade 3">Grade 3</option>
+                  <option value="Grade 4">Grade 4</option>
+                  <option value="Grade 5">Grade 5</option>
+                  <option value="Grade 6">Grade 6</option>
+                  <option value="Grade 7">Grade 7</option>
+                  <option value="Grade 8">Grade 8</option>
+                  <option value="Grade 9">Grade 9</option>
+                  <option value="Grade 10">Grade 10</option>
+                  <option value="Grade 11">Grade 11</option>
+                  <option value="Grade 12">Grade 12</option>
+                </select>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-[#303030] mb-2">Upload File</label>
+                <div className="border-2 border-dashed border-[#d4d4d4] rounded-2xl p-4 text-center bg-[#f6f6f6]">
+                  <label className="inline-block px-4 py-2 bg-[#181818] text-white rounded-full text-sm font-bold cursor-pointer">
+                    Browse Files
+                    <input type="file" className="hidden" onChange={handleFileChange} accept=".jpg,.jpeg,.png,.pdf" />
+                  </label>
+                  {file && <p className="mt-2 text-[#22c55e] text-sm">{file.name}</p>}
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-[#303030] mb-2">Due Date</label>
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full px-3 py-2 border-2 border-[#d4d4d4] rounded-lg" />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-[#303030] mb-2">Additional Information</label>
+                <textarea value={additionalInfo} onChange={(e) => setAdditionalInfo(e.target.value)} className="w-full px-3 py-2 border-2 border-[#d4d4d4] rounded-lg h-20" />
+              </div>
+
+              {/* Question Types (mobile compact) */}
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-[#303030] mb-3">Question Type</h3>
+                <div className="space-y-3">
+                  {questionTypes.map((qt) => (
+                    <div key={qt.id} className="p-3 bg-white rounded-xl border border-[#ececec]">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <input
+                          type="text"
+                          value={qt.name}
+                          onChange={(e) =>
+                            setQuestionTypes(
+                              questionTypes.map((q) =>
+                                q.id === qt.id ? { ...q, name: e.target.value } : q,
+                              ),
+                            )
+                          }
+                          className="flex-1 px-2 py-1 border border-[#e6e6e6] rounded-md text-sm"
+                          placeholder="Question Type Name"
+                        />
+
+                        <button onClick={() => removeQuestionType(qt.id)} className="ml-2 text-[#a9a9a9] hover:text-red-500">
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={qt.type}
+                          onChange={(e) =>
+                            setQuestionTypes(
+                              questionTypes.map((q) =>
+                                q.id === qt.id ? { ...q, type: e.target.value as any } : q,
+                              ),
+                            )
+                          }
+                          className="px-2 py-1 border border-[#e6e6e6] rounded-md text-sm"
+                        >
+                          <option value="MCQ">MCQ</option>
+                          <option value="ShortAnswer">Short Answer</option>
+                          <option value="LongAnswer">Long Answer</option>
+                          <option value="TrueFalse">True/False</option>
+                          <option value="FillInTheBlank">Fill in Blank</option>
+                        </select>
+
+                        <select
+                          value={qt.difficulty}
+                          onChange={(e) =>
+                            setQuestionTypes(
+                              questionTypes.map((q) =>
+                                q.id === qt.id ? { ...q, difficulty: e.target.value as any } : q,
+                              ),
+                            )
+                          }
+                          className="px-2 py-1 border border-[#e6e6e6] rounded-md text-sm"
+                        >
+                          <option value="Easy">Easy</option>
+                          <option value="Moderate">Moderate</option>
+                          <option value="Hard">Hard</option>
+                        </select>
+
+                        <div className="flex items-center ml-auto gap-2">
+                          <button onClick={() => handleQuestionCountChange(qt.id, -1)} className="px-2 py-1 bg-[#f3f3f3] rounded-md">−</button>
+                          <div className="px-3 font-bold">{qt.count}</div>
+                          <button onClick={() => handleQuestionCountChange(qt.id, 1)} className="px-2 py-1 bg-[#f3f3f3] rounded-md">+</button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-2 text-sm">
+                        <div className="text-[#6b6b6b]">Marks/Q: <span className="font-bold text-[#303030]">{qt.marks}</span></div>
+                        <div className="text-[#6b6b6b]">Total: <span className="font-bold text-[#303030]">{qt.count * qt.marks}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 flex items-center gap-3">
+                  <button onClick={addQuestionType} className="flex-1 px-3 py-2 bg-[#181818] text-white rounded-full text-sm font-bold">Add Question Type</button>
+                  <div className="text-sm text-[#5e5e5e]">Q: <span className="font-bold text-[#303030]">{totalQuestions}</span></div>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center mt-4">
+                <button onClick={() => router.push('/dashboard')} className="px-4 py-2 border-2 border-[#303030] text-[#303030] rounded-full font-bold">← Previous</button>
+                <button onClick={handleNext} disabled={isSubmitting} className="px-4 py-2 bg-[#181818] text-white rounded-full font-bold">{isSubmitting ? 'Generating...' : 'Next →'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* iOS Home Indicator */}
+        <div className="h-6 bg-white/80 flex items-center justify-center flex-shrink-0">
+          <div className="w-32 h-1 bg-[#ddd] rounded-full" />
+        </div>
+
+        {/* Sidebar Overlay */}
+        {sidebarOpen && (
+          <>
+            <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSidebarOpen(false)} />
+            <div className="fixed left-0 top-0 h-full z-50 overflow-y-auto">
+              <div className="flex items-start">
+                <Sidebar />
+                <button onClick={() => setSidebarOpen(false)} className="p-4 text-gray-600 hover:text-gray-900">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <DashboardLayout>
