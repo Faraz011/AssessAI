@@ -4,7 +4,6 @@ A production-grade assessment generation system that leverages Large Language Mo
 
 ## 🚀 Features
 
-- **AI-Powered Question Generation**: Uses Anthropic Claude 3.5 Sonnet and OpenAI GPT-4 with smart routing
 - **AI-Powered Question Generation**: Uses Anthropic Claude 3.5 Sonnet, OpenAI GPT-4 and optional Groq-accelerated inference with smart routing
 - **Interactive AI Edits**: Per-question and per-section AI refinements with `edit_history` and undo support
 - **Real-time Generation Status**: WebSocket-based live updates with HTTP polling fallback
