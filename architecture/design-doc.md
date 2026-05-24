@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-VedaAI is a production-grade assessment generation system that leverages Large Language Models (LLMs) to automatically create high-quality question papers from uploaded documents. The system is built as a monorepo with a Node.js/Express backend and Next.js frontend, designed for scalability, reliability, and cost-efficiency.
+VedaAI is a production-grade assessment generation system that leverages Large Language Models (LLMs) to automatically create high-quality question papers from uploaded documents. The system is built as a monorepo with a Node.js/Express backend and Next.js frontend, designed for scalability, reliability, and cost-efficiency. The architecture supports multiple inference backends — cloud LLM APIs, optional Groq-accelerated inference, and surgical AI edit workflows that allow per-question and per-section refinements with full edit history and undo/restore.
 
 **Key Metrics Target:**
 
@@ -154,16 +154,17 @@ interface GenerationJob {
 
 - **Anthropic Claude 3.5 Sonnet** (Default):
   - Fast generation for standard question types
-  - Lower cost ($3/1M input tokens)
-  - Excellent for creative content
+  - Cost-effective for creative content
 - **OpenAI GPT-4 Turbo** (Complex cases):
   - Used for validation & fine-tuning
-  - Mathematical question verification
-  - Complex essay rubric generation
+  - Mathematical question verification and complex reasoning
+- **Groq Accelerated Inference** (Optional):
+  - Hardware-accelerated inference path for high-throughput or on-prem workloads
+  - Useful for batch generation and scenarios where lower latency and predictable cost are required
 
 **Circuit Breaker Pattern:**
 
-- Monitor LLM API error rates
+- Monitor LLM/API error rates
 - If >10% errors in last 100 calls, switch to fallback model
 - Auto-recovery when error rate drops below 5%
 - Immediate fail-fast for known API outages
@@ -174,6 +175,13 @@ interface GenerationJob {
 - Cosine similarity matching (threshold: 0.85)
 - TTL: 7 days for similar prompts
 - Saves 90% on API costs for repeated question types
+
+**AI Edit / Surgical Refinement:**
+
+- The backend exposes targeted edit APIs that accept a `scope` (`question` | `section`) and an `action` (e.g., `refine`, `simplify`, `translate`, `change-difficulty`).
+- Edits are executed as minimal LLM calls that receive the original scope context and return only the modified JSON for that scope — this minimizes cost and preserves the rest of the paper.
+- Each edit is recorded in an `edit_history` array on the `Assignment` document with metadata (scope, action, author, timestamp, originalContent, newContent) to enable undo and auditing.
+- UI updates are broadcast via WebSocket events such as `question_updated` and `section_updated` so the frontend can apply the change in-place without full regeneration.
 
 #### 2.4 Question Paper Generation
 

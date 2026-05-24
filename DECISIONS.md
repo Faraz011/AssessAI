@@ -339,6 +339,44 @@ This document records all major architectural decisions, their rationale, and co
 
 ---
 
+## D17: Groq-Accelerated Inference
+
+**Decision**: Support Groq for accelerated LLM inference alongside Anthropic/OpenAI routing.
+
+**Rationale**:
+
+- Groq provides hardware-accelerated inference that can reduce latency and cost for batch or on-prem inference.
+- Adding Groq as an option gives flexibility to run high-throughput workloads more cheaply in production or on private infrastructure.
+- Groq can be used for predictable, high-volume inference paths (e.g., bulk question generation, cached pipelines).
+
+**Alternatives Considered**:
+
+- Only cloud-hosted LLM APIs (Anthropic/OpenAI) — simplest but can be more expensive at high throughput.
+- Self-hosted open models (Llama, Mistral) on GPUs — flexible but operationally heavy.
+
+**Trade-off**: Additional integration complexity and operational surface (provisioning Groq endpoints), but lower cost and latency at scale.
+
+---
+
+## D18: Surgical AI Edits (Per-question & Section-level Refinement)
+
+**Decision**: Implement an "AI edit" workflow that allows users to request targeted refinements to individual questions or entire sections. Persist edits in an `edit_history` and expose undo/restore operations.
+
+**Rationale**:
+
+- Teachers need precise control over generated content; full-regeneration is expensive and slow.
+- Granular edits (per-question / per-section) let the system call the LLM with a surgical prompt that preserves the rest of the paper while only altering the requested scope.
+- Storing `edit_history` enables auditability, undo, and collaborative workflows.
+
+**Alternatives Considered**:
+
+- Always re-generate the entire paper (Pro: simpler; Con: high cost, loses local edits).
+- Client-only text editing (Pro: immediate; Con: manual effort, no LLM assistance).
+
+**Trade-off**: Slightly more complex backend APIs and data model (edit entries, scope metadata), but far better UX and cost profile for iterative teacher workflows.
+
+---
+
 ## Summary of Trade-offs
 
 | Decision            | Pro                           | Con                      | Mitigation                    |
