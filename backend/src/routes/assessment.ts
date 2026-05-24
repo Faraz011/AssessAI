@@ -398,7 +398,8 @@ router.get("/status/:jobId", async (_req, res, next) => {
 router.get("/download/:jobId", async (_req, res, next) => {
   try {
     const { jobId } = _req.params;
-    const previewMode = _req.query.preview === "1" || _req.query.preview === "true";
+    const previewMode =
+      _req.query.preview === "1" || _req.query.preview === "true";
     logger.info("GET /assessment/download", { jobId });
 
     const assignment = await getAssignment(jobId);
