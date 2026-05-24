@@ -6,6 +6,7 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { writeFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
+import os from "os";
 import { logger } from "../utils/logger";
 
 interface QuestionPaperPDF {
@@ -298,7 +299,7 @@ export async function generatePDF(
     }
 
     // Save PDF
-    const tmpDir = "/tmp";
+    const tmpDir = os.tmpdir();
     if (!existsSync(tmpDir)) {
       mkdirSync(tmpDir, { recursive: true });
     }

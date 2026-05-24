@@ -398,6 +398,7 @@ router.get("/status/:jobId", async (_req, res, next) => {
 router.get("/download/:jobId", async (_req, res, next) => {
   try {
     const { jobId } = _req.params;
+    const previewMode = _req.query.preview === "1" || _req.query.preview === "true";
     logger.info("GET /assessment/download", { jobId });
 
     const assignment = await getAssignment(jobId);
@@ -425,7 +426,10 @@ router.get("/download/:jobId", async (_req, res, next) => {
     // Set response headers
     const filename = `${assignment.input.title}-Grade${assignment.input.grade}.pdf`;
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `${previewMode ? "inline" : "attachment"}; filename="${filename}"`,
+    );
 
     // Stream the file
     const stream = fs.createReadStream(pdfPath);
@@ -842,11 +846,9 @@ router.post("/:jobId/refine", async (req, res, next) => {
     }
 
     if (action === "custom" && !customInstruction) {
-      return res
-        .status(400)
-        .json({
-          error: "customInstruction is required when action is 'custom'",
-        });
+      return res.status(400).json({
+        error: "customInstruction is required when action is 'custom'",
+      });
     }
 
     if (action === "translate" && !["en", "hi"].includes(targetLanguage)) {

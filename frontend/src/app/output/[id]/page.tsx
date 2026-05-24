@@ -148,7 +148,8 @@ export default function OutputPage() {
   const handleDownload = async () => {
     try {
       setIsDownloading(true);
-      const response = await fetch(`${getApiUrl()}/api/assessment/download/${jobId}`);
+      const downloadUrl = assignment?.downloadUrl || `${getApiUrl()}/api/assessment/download/${jobId}`;
+      const response = await fetch(downloadUrl);
       if (!response.ok) throw new Error("Download failed");
 
       const blob = await response.blob();
@@ -491,8 +492,12 @@ export default function OutputPage() {
                         <p className="text-sm opacity-80">Preview</p>
                       </div>
                       <div className="p-4">
-                        {assignment.result.pdfPath ? (
-                          <iframe src={`${getApiUrl()}/api/assessment/download/${jobId}`} className="w-full h-48 rounded-md bg-white" title="PDF Preview" />
+                        {assignment.downloadUrl || assignment.result.pdfPath ? (
+                          <iframe
+                            src={`${assignment.downloadUrl || `${getApiUrl()}/api/assessment/download/${jobId}`}?preview=1`}
+                            className="w-full h-48 rounded-md bg-white"
+                            title="PDF Preview"
+                          />
                         ) : (
                           <div className="h-48 flex items-center justify-center text-sm text-white/80">PDF preview not available</div>
                         )}

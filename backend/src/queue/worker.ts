@@ -9,6 +9,7 @@ import { logger } from "../utils/logger";
 import { QuestionGenerationJobData } from "./producer";
 import { getAssignment, updateAssignment } from "../models/Assignment";
 import { generateQuestionPaper } from "../generator/questionPaper";
+import { generatePDF } from "../services/pdfGenerator";
 
 let worker: Worker<QuestionGenerationJobData> | null = null;
 
@@ -69,12 +70,40 @@ export async function startWorker(): Promise<
 
           const questionPaper = questionPaperResult.questionPaper;
 
-          await job.updateProgress(90);
+          // Render the generated paper to PDF before marking the job complete.
+          await updateAssignment(jobData.jobId, {
+            status: "rendering",
+            progress: 92,
+          });
+          await job.updateProgress(92);
+
+          const pdfQuestionPaper = {
+            ...questionPaper,
+            sections: questionPaper.sections.map((section) => ({
+              ...section,
+              instruction: section.instruction || "Attempt all questions.",
+            })),
+          };
+
+          const pdfResult = await generatePDF(pdfQuestionPaper, {
+            jobId: jobData.jobId,
+            title: assignment.input.title,
+            subject: assignment.input.subject,
+            grade: assignment.input.grade,
+            date: new Date(),
+          });
+
+          const questionPaperWithPdf = {
+            ...questionPaper,
+            pdfPath: pdfResult.filePath,
+          };
+
+          await job.updateProgress(98);
 
           // Step 4: Update DB status to 'done' with result
           await updateAssignment(jobData.jobId, {
             status: "done",
-            output: questionPaper,
+            output: questionPaperWithPdf,
             progress: 100,
           });
 
@@ -87,7 +116,7 @@ export async function startWorker(): Promise<
 
           return {
             success: true,
-            questionPaper,
+            questionPaper: questionPaperWithPdf,
           };
         } catch (error) {
           logger.error(`Job ${job.id} failed`, {
