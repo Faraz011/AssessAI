@@ -417,51 +417,47 @@ router.get("/download/:jobId", async (_req, res, next) => {
       return;
     }
 
-    let pdfPath = assignment.output.pdfPath;
+    // Normalize sections and recompute totals defensively before rendering PDF
+    const safePaperInput = {
+      sections: Array.isArray(assignment.output.sections) ? assignment.output.sections : [],
+      totalQuestions: assignment.output.totalQuestions,
+      totalMarks: assignment.output.totalMarks,
+    };
 
-    // Older assignments may not have a persisted PDF path yet.
-    // Generate one on demand so download/preview still work.
-    if (!pdfPath) {
-      const safeSections = Array.isArray(assignment.output.sections)
-        ? assignment.output.sections.map((section) => ({
-            ...section,
-            instruction:
-              typeof section.instruction === "string" &&
-              section.instruction.trim().length > 0
-                ? section.instruction
-                : "Attempt all questions.",
-            questions: Array.isArray(section.questions)
-              ? section.questions
-              : [],
-          }))
-        : [];
+    const normalized = (require("../services/pdfGenerator") as any)
+      .normalizeQuestionPaper(safePaperInput as any);
 
-      const pdfResult = await generatePDF(
-        {
-          ...assignment.output,
-          sections: safeSections,
+    logger.info("Regenerating PDF with normalized paper", {
+      jobId,
+      totalQuestions: normalized.totalQuestions,
+      totalMarks: normalized.totalMarks,
+    });
+
+    const pdfResult = await generatePDF(
+      {
+        ...normalized,
+        sections: normalized.sections,
+      } as any,
+      {
+        jobId,
+        title: assignment.input.title,
+        subject: assignment.input.subject,
+        grade: assignment.input.grade,
+        date: assignment.output.generatedAt,
+      },
+    );
+
+    const pdfPath = pdfResult.filePath;
+
+    await Assignment.updateOne(
+      { jobId },
+      {
+        $set: {
+          "output.pdfPath": pdfPath,
+          updatedAt: new Date(),
         },
-        {
-          jobId,
-          title: assignment.input.title,
-          subject: assignment.input.subject,
-          grade: assignment.input.grade,
-          date: assignment.output.generatedAt,
-        },
-      );
-
-      pdfPath = pdfResult.filePath;
-
-      await Assignment.updateOne(
-        { jobId },
-        {
-          $set: {
-            "output.pdfPath": pdfPath,
-            updatedAt: new Date(),
-          },
-        },
-      );
-    }
+      },
+    );
 
     // Verify file exists before streaming
     try {

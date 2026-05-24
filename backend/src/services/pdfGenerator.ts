@@ -45,6 +45,117 @@ interface GeneratePDFResult {
   fileName: string;
 }
 
+type SafeQuestionPaper = {
+  sections: Array<{
+    name: string;
+    instruction: string;
+    questions: Array<{
+      number: number;
+      text: string;
+      difficulty: "Easy" | "Moderate" | "Hard";
+      marks: number;
+      type:
+        | "MCQ"
+        | "ShortAnswer"
+        | "LongAnswer"
+        | "TrueFalse"
+        | "FillInTheBlank";
+      options?: string[];
+    }>;
+  }>;
+  totalQuestions: number;
+  totalMarks: number;
+};
+
+function safeText(value: unknown, fallback: string): string {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed.toLowerCase() !== "undefined"
+    ? trimmed
+    : fallback;
+}
+
+function safeNumber(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeQuestionPaper(
+  questionPaper: QuestionPaperPDF,
+): SafeQuestionPaper {
+  const sections = (Array.isArray(questionPaper.sections)
+    ? questionPaper.sections
+    : []
+  ).map((section, sectionIndex) => {
+    const questions = (Array.isArray(section.questions)
+      ? section.questions
+      : []
+    ).map((question, questionIndex) => {
+      const type =
+        question.type === "MCQ" ||
+        question.type === "ShortAnswer" ||
+        question.type === "LongAnswer" ||
+        question.type === "TrueFalse" ||
+        question.type === "FillInTheBlank"
+          ? question.type
+          : "ShortAnswer";
+
+      const difficulty =
+        question.difficulty === "Easy" ||
+        question.difficulty === "Moderate" ||
+        question.difficulty === "Hard"
+          ? question.difficulty
+          : "Moderate";
+
+      const normalizedQuestion: SafeQuestionPaper["sections"][number]["questions"][number] = {
+        number: safeNumber(question.number, questionIndex + 1),
+        text: safeText(question.text, "Question text unavailable."),
+        difficulty,
+        marks: safeNumber(question.marks, 1),
+        type,
+      };
+
+      if (type === "MCQ") {
+        const options = Array.isArray(question.options) ? question.options : [];
+        const cleanedOptions = options
+          .map((option) => safeText(option, "").trim())
+          .filter((option) => option.length > 0)
+          .slice(0, 4);
+
+        while (cleanedOptions.length < 4) {
+          cleanedOptions.push(`Option ${cleanedOptions.length + 1}`);
+        }
+
+        normalizedQuestion.options = cleanedOptions;
+      }
+
+      return normalizedQuestion;
+    });
+
+    return {
+      name: safeText(section.name, `Section ${String.fromCharCode(65 + sectionIndex)}`),
+      instruction: safeText(section.instruction, "Attempt all questions."),
+      questions,
+    };
+  });
+
+  const totalQuestions = sections.reduce(
+    (sum, section) => sum + section.questions.length,
+    0,
+  );
+
+  const totalMarks = sections.reduce(
+    (sum, section) =>
+      sum + section.questions.reduce((sectionSum, question) => sectionSum + question.marks, 0),
+    0,
+  );
+
+  return { sections, totalQuestions, totalMarks };
+}
+
 /**
  * Generate professional PDF for question paper
  *
@@ -64,6 +175,15 @@ export async function generatePDF(
       jobId: metadata.jobId,
       title: metadata.title,
     });
+
+    const safePaper = normalizeQuestionPaper(questionPaper);
+    const pdfTitle = safeText(metadata.title, "Question Paper");
+    const pdfGrade = safeText(metadata.grade, "-");
+    const pdfSubject = metadata.subject ? safeText(metadata.subject, "") : "";
+    const headerLine = pdfSubject
+      ? `Subject: ${pdfSubject} • Class: ${pdfGrade}`
+      : `Class: ${pdfGrade}`;
+    const totalMarks = safeNumber(safePaper.totalMarks, questionPaper.totalMarks);
 
     // Create PDF document
     const pdfDoc = await PDFDocument.create();
@@ -114,20 +234,13 @@ export async function generatePDF(
       yPosition -= size + 2 + spaceAfter;
     };
 
-    // Header Section
-    const schoolName = metadata.schoolName || "VEDAAI Assessment System";
-    addText(schoolName, 14, true, 10, 10, true);
+    // Header Section - match the output page styling more closely
+    addText("Your customized question paper", 18, true, 10, 8, true);
 
-    addText(
-      `${metadata.title}${metadata.subject ? ` (${metadata.subject})` : ""}`,
-      18,
-      true,
-      5,
-      8,
-      true,
-    );
+    addText(pdfTitle, 16, true, 2, 4, true);
 
-    addText(`Grade: ${metadata.grade}`, 11, true, 2, 2, false);
+    addText(headerLine, 11, true, 2, 2, false);
+
     const dateStr = metadata.date
       ? metadata.date.toLocaleDateString()
       : new Date().toLocaleDateString();
@@ -165,9 +278,8 @@ export async function generatePDF(
     addText("Instructions:", 12, false, 12, 5, true);
     const instructions = [
       "• All questions are compulsory.",
-      "• Write answers in the space provided.",
       "• Use ballpoint pen only.",
-      `• Total marks: ${questionPaper.totalMarks}`,
+      `• Total marks: ${totalMarks}`,
     ];
 
     for (const instr of instructions) {
@@ -177,12 +289,9 @@ export async function generatePDF(
     yPosition -= 10;
 
     // Question Sections
-    for (const section of questionPaper.sections || []) {
+    for (const section of safePaper.sections || []) {
       const questions = Array.isArray(section.questions) ? section.questions : [];
-      const sectionInstruction =
-        typeof section.instruction === "string" && section.instruction.trim().length > 0
-          ? section.instruction
-          : "Attempt all questions.";
+      const sectionInstruction = section.instruction || "Attempt all questions.";
 
       // Section header
       if (yPosition < margin + 100) {
@@ -190,32 +299,27 @@ export async function generatePDF(
         yPosition = pageHeight - margin;
       }
 
-      // Draw section header background
-      const headerY = yPosition - 20;
-      currentPage.drawRectangle({
-        x: margin,
-        y: headerY,
-        width: contentWidth,
-        height: 20,
-        color: rgb(0.85, 0.85, 0.85), // Light gray background
-        borderColor: rgb(0, 0, 0),
-        borderWidth: 1,
-      });
+      // Plain section header without a gray box
+      const headerY = yPosition - 18;
 
       // Section name and total marks
-      const sectionMarks = questions.reduce(
-        (sum, q) => sum + q.marks,
-        0,
-      );
+      const sectionMarks = questions.reduce((sum, q) => sum + q.marks, 0);
       currentPage.drawText(`${section.name} (Total Marks: ${sectionMarks})`, {
-        x: margin + 5,
-        y: headerY + 5,
+        x: margin,
+        y: headerY + 4,
         size: 12,
         font: helveticaBoldFont,
         color: rgb(0, 0, 0),
       });
 
-      yPosition = headerY - 10;
+      currentPage.drawLine({
+        start: { x: margin, y: headerY - 2 },
+        end: { x: margin + contentWidth, y: headerY - 2 },
+        thickness: 0.75,
+        color: rgb(0.7, 0.7, 0.7),
+      });
+
+      yPosition = headerY - 14;
 
       // Section instruction
       addText(sectionInstruction, 10, false, 5, 8, false);
@@ -241,33 +345,8 @@ export async function generatePDF(
           yPosition -= 3;
         }
 
-        // Answer space
-        if (
-          question.type === "ShortAnswer" ||
-          question.type === "FillInTheBlank"
-        ) {
-          // Draw 2 lines for short answer
-          for (let i = 0; i < 2; i++) {
-            currentPage.drawLine({
-              start: { x: margin, y: yPosition },
-              end: { x: margin + contentWidth, y: yPosition },
-              thickness: 0.5,
-              color: rgb(0.7, 0.7, 0.7),
-            });
-            yPosition -= 15;
-          }
-        } else if (question.type === "LongAnswer") {
-          // Draw 4 lines for long answer
-          for (let i = 0; i < 4; i++) {
-            currentPage.drawLine({
-              start: { x: margin, y: yPosition },
-              end: { x: margin + contentWidth, y: yPosition },
-              thickness: 0.5,
-              color: rgb(0.7, 0.7, 0.7),
-            });
-            yPosition -= 15;
-          }
-        } else if (question.type === "TrueFalse") {
+        // Keep the paper compact: no answer-writing lines or blank answer space.
+        if (question.type === "TrueFalse") {
           addText("☐ True          ☐ False", 10, false, 2, 8);
         }
 
@@ -294,7 +373,7 @@ export async function generatePDF(
 
       // Total marks in footer of first page only
       if (i === 0) {
-        page.drawText(`Total Marks: ${questionPaper.totalMarks}`, {
+        page.drawText(`Total Marks: ${totalMarks}`, {
           x: margin,
           y: 20,
           size: 10,
@@ -330,3 +409,6 @@ export async function generatePDF(
     throw error;
   }
 }
+
+// Export helper for other modules (used by download route normalization)
+export { normalizeQuestionPaper };
