@@ -12,16 +12,20 @@ type RefinementAction = "simplify" | "rephrase" | "harder" | "easier" | "mcq" | 
 
 interface EditHistoryEntry {
   timestamp: string;
+  scope?: "question" | "section";
   sectionName: string;
-  questionNumber: number;
+  questionNumber?: number;
   action: string;
-  originalQuestion: any;
-  newQuestion: any;
+  originalQuestion?: any;
+  newQuestion?: any;
+  originalSection?: any;
+  newSection?: any;
 }
 
 interface QuestionRefineState {
   sectionIdx: number;
-  questionIdx: number;
+  questionIdx?: number;
+  scope: "question" | "section";
   isRefining: boolean;
   action?: RefinementAction;
   customText?: string;
@@ -42,6 +46,22 @@ export default function OutputPage() {
   const [activeMenuSection, setActiveMenuSection] = useState<string | null>(null);
 
   const handleStatusChange = (status: AssignmentResponse) => setAssignment(status);
+
+  const applySectionUpdate = (sectionName: string, nextSection: any) => {
+    setAssignment((prev) => {
+      if (!prev?.result) return prev;
+      const newAssignment = { ...prev };
+      const result = newAssignment.result!;
+      const section = result.sections.find((s) => s.name === sectionName);
+      if (section) {
+        const sectionIndex = result.sections.findIndex((s) => s.name === sectionName);
+        if (sectionIndex >= 0) {
+          result.sections[sectionIndex] = nextSection;
+        }
+      }
+      return newAssignment;
+    });
+  };
   
   const handleComplete = (result: AssignmentResponse) => {
     setAssignment(result);
@@ -76,16 +96,20 @@ export default function OutputPage() {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        if (message.status === "question_updated" && message.message) {
+        if ((message.status === "question_updated" || message.status === "section_updated") && message.message) {
           const update = JSON.parse(message.message);
           // Update the assignment with the new question
           setAssignment((prev) => {
             if (!prev?.result) return prev;
             const newAssignment = { ...prev };
             const result = newAssignment.result!;
-            const section = result.sections.find((s) => s.name === update.sectionName);
-            if (section) {
-              section.questions[update.questionNumber - 1] = update.newQuestion;
+            const sectionIndex = result.sections.findIndex((s) => s.name === update.sectionName);
+            if (sectionIndex >= 0) {
+              if (update.newSection) {
+                result.sections[sectionIndex] = update.newSection;
+              } else if (typeof update.questionNumber === "number") {
+                result.sections[sectionIndex].questions[update.questionNumber - 1] = update.newQuestion;
+              }
             }
             return newAssignment;
           });
@@ -181,6 +205,7 @@ export default function OutputPage() {
       setRefineState({
         sectionIdx,
         questionIdx,
+        scope: "question",
         isRefining: true,
         action,
       });
@@ -234,6 +259,56 @@ export default function OutputPage() {
     }
   };
 
+  const handleRefineSection = async (
+    sectionName: string,
+    sectionIdx: number,
+    action: RefinementAction,
+    customInstruction?: string,
+  ) => {
+    try {
+      setRefineState({
+        sectionIdx,
+        scope: "section",
+        isRefining: true,
+        action,
+      });
+      setActiveMenuSection(null);
+
+      const body: any = {
+        sectionName,
+        action,
+      };
+
+      if (action === "custom" && customInstruction) {
+        body.customInstruction = customInstruction;
+      }
+
+      if (action === "translate") {
+        body.targetLanguage = "hi";
+      }
+
+      const res = await fetch(`${getApiUrl()}/api/assessment/${jobId}/refine-section`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to refine section");
+      }
+
+      const data = await res.json();
+      applySectionUpdate(sectionName, data.newSection);
+      setEditHistory(data.editHistory || []);
+      setRefineState(null);
+    } catch (err) {
+      console.error("Section refinement error:", err);
+      alert(`Error refining section: ${err instanceof Error ? err.message : "Unknown error"}`);
+      setRefineState(null);
+    }
+  };
+
   const handleUndo = async () => {
     try {
       const res = await fetch(`${getApiUrl()}/api/assessment/${jobId}/undo`, {
@@ -251,9 +326,13 @@ export default function OutputPage() {
         if (!prev?.result) return prev;
         const newAssignment = { ...prev };
         const result = newAssignment.result!;
-        const section = result.sections.find((s) => s.name === restored.sectionName);
-        if (section) {
-          section.questions[restored.questionNumber - 1] = restored.question;
+        const sectionIndex = result.sections.findIndex((s) => s.name === restored.sectionName);
+        if (sectionIndex >= 0) {
+          if (restored.section) {
+            result.sections[sectionIndex] = restored.section;
+          } else if (restored.questionNumber) {
+            result.sections[sectionIndex].questions[restored.questionNumber - 1] = restored.question;
+          }
         }
         return newAssignment;
       });
@@ -344,13 +423,72 @@ export default function OutputPage() {
                     <div className="prose max-w-none text-[#111827]">
                       {assignment.result.sections?.map((section, sectionIdx) => (
                         <section key={sectionIdx} className="mb-6">
-                          <h3 className="text-xl font-bold text-center mb-3">{section.name}</h3>
+                          <div className="flex items-center justify-center gap-2 mb-3">
+                            <h3 className="text-xl font-bold text-center">{section.name}</h3>
+                            <button
+                              onClick={() => {
+                                setActiveMenuSection(
+                                  activeMenuSection === `${sectionIdx}-section`
+                                    ? null
+                                    : `${sectionIdx}-section`
+                                );
+                              }}
+                              className="text-[#111827] hover:text-[#303030] p-1 rounded hover:bg-[#f6f6f6] transition-opacity"
+                              title="Edit whole section"
+                            >
+                              <Sparkles size={18} />
+                            </button>
+                          </div>
                           <p className="text-sm italic text-[#6b7280] text-center mb-4">{section.instruction || "Attempt all questions."}</p>
+                          {activeMenuSection === `${sectionIdx}-section` && (
+                            <div className="mb-4 p-3 bg-[#f9fafb] border border-[#e6e6e6] rounded-lg">
+                              <div className="space-y-2">
+                                {[
+                                  { action: "easier" as RefinementAction, label: "Make easier" },
+                                  { action: "harder" as RefinementAction, label: "Make harder" },
+                                  { action: "rephrase" as RefinementAction, label: "Rephrase" },
+                                  { action: "mcq" as RefinementAction, label: "Convert to MCQ" },
+                                  { action: "translate" as RefinementAction, label: "Translate to Hindi" },
+                                  { action: "simplify" as RefinementAction, label: "Simplify" },
+                                ].map((option) => (
+                                  <button
+                                    key={option.action}
+                                    onClick={() => handleRefineSection(section.name, sectionIdx, option.action)}
+                                    className="w-full text-left text-sm px-3 py-2 rounded hover:bg-[#e6e6e6] transition-colors text-[#303030]"
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+
+                                <div className="mt-2 pt-2 border-t border-[#d1d5db]">
+                                  <input
+                                    type="text"
+                                    placeholder="Or type custom instruction for this section..."
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && e.currentTarget.value) {
+                                        handleRefineSection(
+                                          section.name,
+                                          sectionIdx,
+                                          "custom",
+                                          e.currentTarget.value,
+                                        );
+                                      }
+                                    }}
+                                    className="w-full text-xs px-2 py-1.5 border border-[#d1d5db] rounded focus:outline-none focus:ring-1 focus:ring-[#303030]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           <ol className="list-decimal list-inside space-y-4">
                             {section.questions?.map((q, qi) => {
                               const isRefining =
                                 refineState?.sectionIdx === sectionIdx &&
+                                refineState?.scope === "question" &&
                                 refineState?.questionIdx === qi;
+                              const isSectionRefining =
+                                refineState?.sectionIdx === sectionIdx &&
+                                refineState?.scope === "section";
                               return (
                                 <li
                                   key={qi}
@@ -364,6 +502,11 @@ export default function OutputPage() {
                                           Refining{" "}
                                           <span className="inline-block ml-1 w-3 h-3 bg-[#999] rounded-full animate-pulse" />
                                         </span>
+                                      ) : isSectionRefining ? (
+                                        <span className="text-[#999] italic">
+                                          Refining section{" "}
+                                          <span className="inline-block ml-1 w-3 h-3 bg-[#999] rounded-full animate-pulse" />
+                                        </span>
                                       ) : (
                                         <span>{q.text}</span>
                                       )}
@@ -371,18 +514,20 @@ export default function OutputPage() {
                                     <div className="flex items-center gap-2">
                                       <div className="ml-4 font-semibold text-sm">{q.marks}m</div>
                                       {/* Refine button - appears on hover */}
-                                      <button
-                                        onClick={() => {
-                                          setActiveMenuSection(
-                                            activeMenuSection === `${sectionIdx}-${qi}`
-                                              ? null
-                                              : `${sectionIdx}-${qi}`
-                                          );
-                                        }}
-                                        className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 text-[#111827] hover:text-[#303030] p-1 rounded hover:bg-[#f6f6f6]"
-                                      >
-                                        <Sparkles size={18} />
-                                      </button>
+                                      {!isSectionRefining && (
+                                        <button
+                                          onClick={() => {
+                                            setActiveMenuSection(
+                                              activeMenuSection === `${sectionIdx}-${qi}`
+                                                ? null
+                                                : `${sectionIdx}-${qi}`
+                                            );
+                                          }}
+                                          className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 text-[#111827] hover:text-[#303030] p-1 rounded hover:bg-[#f6f6f6]"
+                                        >
+                                          <Sparkles size={18} />
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
 
@@ -410,7 +555,7 @@ export default function OutputPage() {
                                                 qi + 1,
                                                 sectionIdx,
                                                 qi,
-                                                option.action
+                                                option.action,
                                               )
                                             }
                                             className="w-full text-left text-sm px-3 py-2 rounded hover:bg-[#e6e6e6] transition-colors text-[#303030]"
@@ -432,7 +577,7 @@ export default function OutputPage() {
                                                   sectionIdx,
                                                   qi,
                                                   "custom",
-                                                  e.currentTarget.value
+                                                  e.currentTarget.value,
                                                 );
                                               }
                                             }}
@@ -468,7 +613,10 @@ export default function OutputPage() {
                           {editHistory.map((edit, idx) => (
                             <div key={idx} className="text-xs bg-white p-2 rounded border border-[#e6e6e6]">
                               <p className="font-semibold text-[#303030]">
-                                {edit.sectionName} Q{edit.questionNumber} • {edit.action}
+                                {edit.sectionName}
+                                {edit.scope === "section"
+                                  ? " • Section edit"
+                                  : ` Q${edit.questionNumber} • Question edit`} • {edit.action}
                               </p>
                               <p className="text-[#6b7280] mt-1">
                                 {new Date(edit.timestamp).toLocaleTimeString()}
@@ -477,8 +625,8 @@ export default function OutputPage() {
                           ))}
                         </div>
                         {editHistory.length > 0 && (
-                          <button
-                            onClick={handleUndo}
+                            <button
+                              onClick={handleUndo}
                             className="w-full mt-3 px-3 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold transition-colors"
                           >
                             ↺ Undo Last Edit

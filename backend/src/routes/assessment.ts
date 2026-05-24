@@ -833,7 +833,7 @@ router.delete("/:jobId", async (req, res, next) => {
  * Cost: ~₹0.30 per question vs ₹4.50 per full 25-question paper
  */
 
-import { validateQuestion } from "../schemas/questionPaper";
+import { SectionSchema, validateQuestion } from "../schemas/questionPaper";
 import { broadcastToJob } from "../utils/websocket";
 
 type RefinementAction =
@@ -844,6 +844,20 @@ type RefinementAction =
   | "mcq"
   | "translate"
   | "custom";
+
+function recalculateOutputTotals(sections: Array<{ questions: Array<{ marks: number }> }>) {
+  return {
+    totalQuestions: sections.reduce(
+      (sum, section) => sum + section.questions.length,
+      0,
+    ),
+    totalMarks: sections.reduce(
+      (sum, section) =>
+        sum + section.questions.reduce((sectionSum, question) => sectionSum + question.marks, 0),
+      0,
+    ),
+  };
+}
 
 /**
  * POST /api/assessment/:jobId/refine
@@ -970,6 +984,7 @@ router.post("/:jobId/refine", async (req, res, next) => {
     // Update MongoDB
     const editEntry = {
       timestamp: new Date(),
+      scope: "question" as const,
       sectionName,
       questionNumber,
       action,
@@ -980,6 +995,8 @@ router.post("/:jobId/refine", async (req, res, next) => {
     // Update section with new question
     assignment.output.sections[sectionIndex].questions[questionIndex] =
       refinedQuestion;
+
+    const totals = recalculateOutputTotals(assignment.output.sections);
 
     // Track edit history (max 100 edits per paper)
     const editHistory = (assignment as any).edit_history || [];
@@ -994,6 +1011,9 @@ router.post("/:jobId/refine", async (req, res, next) => {
       {
         $set: {
           "output.sections": assignment.output.sections,
+          "output.totalQuestions": totals.totalQuestions,
+          "output.totalMarks": totals.totalMarks,
+          "output.pdfPath": undefined,
           edit_history: editHistory,
           updatedAt: new Date(),
         },
@@ -1037,6 +1057,159 @@ router.post("/:jobId/refine", async (req, res, next) => {
 });
 
 /**
+ * POST /api/assessment/:jobId/refine-section
+ * Refine an entire section in an existing paper
+ */
+router.post("/:jobId/refine-section", async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    const { sectionName, action, customInstruction, targetLanguage } = req.body;
+
+    logger.info("POST /assessment/:jobId/refine-section", {
+      jobId,
+      sectionName,
+      action,
+    });
+
+    if (!sectionName || typeof sectionName !== "string") {
+      return res.status(400).json({ error: "sectionName is required" });
+    }
+
+    const validActions: RefinementAction[] = [
+      "simplify",
+      "rephrase",
+      "harder",
+      "easier",
+      "mcq",
+      "translate",
+      "custom",
+    ];
+    if (!validActions.includes(action)) {
+      return res
+        .status(400)
+        .json({ error: `action must be one of: ${validActions.join(", ")}` });
+    }
+
+    if (action === "custom" && !customInstruction) {
+      return res.status(400).json({
+        error: "customInstruction is required when action is 'custom'",
+      });
+    }
+
+    if (action === "translate" && !["en", "hi"].includes(targetLanguage)) {
+      return res
+        .status(400)
+        .json({ error: "targetLanguage must be 'en' or 'hi'" });
+    }
+
+    const assignment = await getAssignment(jobId);
+    if (!assignment) {
+      return res.status(404).json({ error: "Assignment not found" });
+    }
+
+    if (!assignment.output) {
+      return res.status(400).json({ error: "Assignment has no output yet" });
+    }
+
+    const sectionIndex = assignment.output.sections.findIndex(
+      (s) => s.name === sectionName,
+    );
+    if (sectionIndex === -1) {
+      return res
+        .status(400)
+        .json({ error: `Section "${sectionName}" not found` });
+    }
+
+    const originalSection = assignment.output.sections[sectionIndex];
+    const refinedSection = await refineSection(
+      originalSection,
+      assignment,
+      assignment.input.grade,
+      action,
+      customInstruction,
+      targetLanguage,
+    );
+
+    const validation = SectionSchema.safeParse(refinedSection);
+    if (!validation.success) {
+      logger.error("Refined section validation failed", {
+        errors: validation.error.errors,
+        section: refinedSection,
+      });
+      return res.status(500).json({
+        error: "Generated section validation failed",
+        details: validation.error.errors.map((err) => err.message),
+      });
+    }
+
+    const normalizedSection = {
+      ...validation.data,
+      questions: validation.data.questions.map((question, index) => ({
+        ...question,
+        number: index + 1,
+      })),
+    };
+
+    const editEntry = {
+      timestamp: new Date(),
+      scope: "section" as const,
+      sectionName,
+      action,
+      originalSection,
+      newSection: normalizedSection,
+    };
+
+    assignment.output.sections[sectionIndex] = normalizedSection;
+
+    const totals = recalculateOutputTotals(assignment.output.sections);
+
+    const editHistory = (assignment as any).edit_history || [];
+    editHistory.push(editEntry);
+    if (editHistory.length > 100) {
+      editHistory.shift();
+    }
+
+    await Assignment.updateOne(
+      { jobId },
+      {
+        $set: {
+          "output.sections": assignment.output.sections,
+          "output.totalQuestions": totals.totalQuestions,
+          "output.totalMarks": totals.totalMarks,
+          "output.pdfPath": undefined,
+          edit_history: editHistory,
+          updatedAt: new Date(),
+        },
+      },
+    );
+
+    try {
+      broadcastToJob(jobId, {
+        type: "progress",
+        jobId,
+        status: "section_updated",
+        message: JSON.stringify({
+          sectionName,
+          newSection: normalizedSection,
+          editHistory,
+        }),
+      });
+    } catch (error) {
+      logger.warn("WebSocket broadcast failed:", error);
+    }
+
+    return res.json({
+      success: true,
+      sectionName,
+      newSection: normalizedSection,
+      editHistory,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
  * GET /api/assessment/:jobId/edit-history
  * Retrieve edit history for a paper
  */
@@ -1058,7 +1231,7 @@ router.get("/:jobId/edit-history", async (req, res, next) => {
 
 /**
  * POST /api/assessment/:jobId/undo
- * Undo the last edit to a question
+ * Undo the last edit to a question or section
  */
 router.post("/:jobId/undo", async (req, res, next) => {
   try {
@@ -1076,16 +1249,25 @@ router.post("/:jobId/undo", async (req, res, next) => {
 
     // Pop the last edit
     const lastEdit = editHistory.pop();
-    const { sectionName, questionNumber, originalQuestion } = lastEdit;
+    const { sectionName, questionNumber, originalQuestion, originalSection, scope } =
+      lastEdit;
     const sectionIndex = assignment.output.sections.findIndex(
       (s) => s.name === sectionName,
     );
-    const questionIndex = questionNumber - 1;
 
-    if (sectionIndex >= 0 && questionIndex >= 0) {
-      assignment.output.sections[sectionIndex].questions[questionIndex] =
-        originalQuestion;
+    if (sectionIndex >= 0) {
+      if (scope === "section" && originalSection) {
+        assignment.output.sections[sectionIndex] = originalSection;
+      } else if (typeof questionNumber === "number" && originalQuestion) {
+        const questionIndex = questionNumber - 1;
+        if (questionIndex >= 0) {
+          assignment.output.sections[sectionIndex].questions[questionIndex] =
+            originalQuestion;
+        }
+      }
     }
+
+    const totals = recalculateOutputTotals(assignment.output.sections);
 
     // Save to database
     await Assignment.updateOne(
@@ -1093,6 +1275,9 @@ router.post("/:jobId/undo", async (req, res, next) => {
       {
         $set: {
           "output.sections": assignment.output.sections,
+          "output.totalQuestions": totals.totalQuestions,
+          "output.totalMarks": totals.totalMarks,
+          "output.pdfPath": undefined,
           edit_history: editHistory,
           updatedAt: new Date(),
         },
@@ -1106,11 +1291,12 @@ router.post("/:jobId/undo", async (req, res, next) => {
       broadcastToJob(jobId, {
         type: "progress",
         jobId,
-        status: "question_restored",
+        status: scope === "section" ? "section_restored" : "question_restored",
         message: JSON.stringify({
           sectionName,
           questionNumber,
           restoredQuestion: originalQuestion,
+          restoredSection: originalSection,
         }),
       });
     } catch (error) {
@@ -1119,7 +1305,9 @@ router.post("/:jobId/undo", async (req, res, next) => {
 
     return res.json({
       success: true,
-      restored: { sectionName, questionNumber, question: originalQuestion },
+      restored: scope === "section"
+        ? { sectionName, section: originalSection, scope }
+        : { sectionName, questionNumber, question: originalQuestion, scope },
       editHistory,
     });
   } catch (error) {
@@ -1185,8 +1373,7 @@ Return ONLY valid JSON matching this schema:
   "options": ["A","B","C","D"],
   "difficulty": "Easy|Moderate|Hard",
   "marks": number
-}
-`;
+}`;
 
     const numQuestions = assignment?.input?.sections?.reduce(
       (acc: any, s: any) => {
@@ -1260,6 +1447,143 @@ Return ONLY valid JSON matching this schema:
     logger.error("Failed to refine question via LLM", {
       error: error instanceof Error ? error.message : String(error),
       questionId: question.number,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Refine an entire section using LLM
+ */
+async function refineSection(
+  section: any,
+  assignment: IAssignment,
+  grade: string,
+  action: RefinementAction,
+  customInstruction?: string,
+  targetLanguage?: string,
+): Promise<any> {
+  const actionPrompts: Record<RefinementAction, string> = {
+    simplify:
+      "Rewrite the entire section to be simpler and more straightforward while preserving the number of questions, marks distribution, and overall topic.",
+    rephrase:
+      "Rephrase the entire section using different wording while preserving the number of questions, marks distribution, and overall meaning.",
+    easier:
+      "Rewrite the entire section to be easier to answer while preserving the number of questions, marks distribution, and topic.",
+    harder:
+      "Rewrite the entire section to be more challenging while preserving the number of questions, marks distribution, and topic.",
+    mcq:
+      "Convert the entire section into questions of the same type wherever possible, but keep the same number of questions, numbering, and marks. If a question cannot be converted cleanly, preserve its intent.",
+    translate: `Translate the entire section to ${targetLanguage === "hi" ? "Hindi" : "English"} while preserving the number of questions, numbering, marks, and section instruction.`,
+    custom:
+      customInstruction ||
+      "Modify the entire section based on the instruction provided while preserving structure, numbering, and marks.",
+  };
+
+  const userPrompt = `${userPromptHeader()}
+Grade: ${grade}
+Section Name: ${section.name}
+Original Section Instruction: ${section.instruction || ""}
+Original Questions:
+${section.questions
+  .map(
+    (question: any, index: number) =>
+      `${index + 1}. [${question.type}, ${question.difficulty}, ${question.marks} marks] ${question.text}${question.options ? `\n   Options: ${question.options.join(" | ")}` : ""}`,
+  )
+  .join("\n")}
+
+Action: ${actionPrompts[action]}
+
+Return ONLY valid JSON matching this schema:
+{
+  "name": "${section.name}",
+  "instruction": "...",
+  "questions": [
+    {
+      "number": 1,
+      "text": "...",
+      "type": "MCQ|ShortAnswer|LongAnswer|TrueFalse|FillInTheBlank",
+      "options": ["A","B","C","D"],
+      "difficulty": "Easy|Moderate|Hard",
+      "marks": number
+    }
+  ]
+}`;
+
+  try {
+    const numQuestions = assignment?.input?.sections?.reduce(
+      (acc: any, s: any) => {
+        if (s.name === "Section A") acc.sectionA = s.count;
+        if (s.name === "Section B") acc.sectionB = s.count;
+        if (s.name === "Section C") acc.sectionC = s.count;
+        return acc;
+      },
+      { sectionA: 0, sectionB: 0, sectionC: 0 },
+    );
+
+    const llmResp = await routeLLMCall(
+      userPrompt,
+      assignment.input.title,
+      assignment.input.grade,
+      numQuestions,
+    );
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(llmResp.content.trim());
+    } catch (err) {
+      logger.error("Failed to parse LLM response as JSON", {
+        content: llmResp.content,
+        error: err,
+      });
+      throw new Error("LLM returned invalid JSON for refined section");
+    }
+
+    const refined = {
+      name: parsed.name || section.name,
+      instruction: parsed.instruction || section.instruction,
+      questions: Array.isArray(parsed.questions)
+        ? parsed.questions.map((question: any, index: number) => ({
+            number: index + 1,
+            text: question.text || section.questions[index]?.text || "",
+            type: question.type || section.questions[index]?.type,
+            options: question.options || section.questions[index]?.options,
+            difficulty: question.difficulty || section.questions[index]?.difficulty,
+            marks: question.marks || section.questions[index]?.marks,
+          }))
+        : section.questions,
+    } as any;
+
+    try {
+      await Assignment.updateOne(
+        { jobId: assignment.jobId },
+        {
+          $set: { "meta.modelUsed": llmResp.modelUsed },
+          $inc: { "meta.tokensOut": llmResp.tokensUsed || 0 },
+        },
+      );
+    } catch (err) {
+      logger.warn("Failed to update meta tokens/model", err);
+    }
+
+    try {
+      const redis = getRedis();
+      if (redis) {
+        await redis.setex(
+          `assignment:modified:${assignment.jobId}`,
+          60 * 60 * 24,
+          new Date().toISOString(),
+        );
+      }
+    } catch (err) {
+      logger.warn("Failed to set Redis modified flag", err);
+    }
+
+    return refined;
+  } catch (error) {
+    logger.error("Failed to refine section via LLM", {
+      error: error instanceof Error ? error.message : String(error),
+      sectionName: section.name,
     });
     throw error;
   }

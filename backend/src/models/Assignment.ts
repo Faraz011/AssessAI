@@ -128,7 +128,7 @@ export interface IAssignment extends Document {
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
-  // Edit history for per-question refinements
+  // Edit history for question and section refinements
   edit_history?: EditEntry[];
 }
 
@@ -137,11 +137,14 @@ export interface IAssignment extends Document {
  */
 export interface EditEntry {
   timestamp: Date;
+  scope: "question" | "section";
   sectionName: string;
-  questionNumber: number;
+  questionNumber?: number;
   action: string;
-  originalQuestion: GeneratedQuestion;
-  newQuestion: GeneratedQuestion;
+  originalQuestion?: GeneratedQuestion;
+  newQuestion?: GeneratedQuestion;
+  originalSection?: OutputSection;
+  newSection?: OutputSection;
 }
 
 /**
@@ -320,17 +323,25 @@ const assignmentSchema = new Schema<IAssignment>(
     output: { type: assignmentOutputSchema },
     meta: { type: processingMetaSchema, required: true },
     errorMessage: { type: String },
-    // Edit history for per-question refinements
+    // Edit history for question and section refinements
     edit_history: {
       type: [
         new Schema<EditEntry>(
           {
             timestamp: { type: Date, required: true, default: Date.now },
+            scope: {
+              type: String,
+              enum: ["question", "section"],
+              required: true,
+              default: "question",
+            },
             sectionName: { type: String, required: true },
-            questionNumber: { type: Number, required: true, min: 1 },
+            questionNumber: { type: Number, min: 1 },
             action: { type: String, required: true },
-            originalQuestion: { type: generatedQuestionSchema, required: true },
-            newQuestion: { type: generatedQuestionSchema, required: true },
+            originalQuestion: { type: generatedQuestionSchema },
+            newQuestion: { type: generatedQuestionSchema },
+            originalSection: { type: outputSectionSchema },
+            newSection: { type: outputSectionSchema },
           },
           { _id: false },
         ),
