@@ -186,6 +186,27 @@ export const CostEstimationSchema = z.object({
 export type CostEstimation = z.infer<typeof CostEstimationSchema>;
 
 /**
+ * Validate a single question (for refinement/editing)
+ * @param data - Raw question data
+ * @returns Validation result with typed data or errors
+ */
+export function validateQuestion(
+  data: unknown,
+): { valid: true; data: Question } | { valid: false; errors: string[] } {
+  const result = QuestionSchema.safeParse(data);
+
+  if (!result.success) {
+    const errors = result.error.errors.map((err) => {
+      const path = err.path.length > 0 ? `${err.path.join(".")}` : "root";
+      return `${path}: ${err.message}`;
+    });
+    return { valid: false, errors };
+  }
+
+  return { valid: true, data: result.data };
+}
+
+/**
  * Calculate estimated cost from tokens
  * @param estimation - Cost estimation parameters
  * @returns Estimated cost in INR and USD

@@ -765,4 +765,354 @@ router.delete("/:jobId", async (req, res, next) => {
   }
 });
 
+/**
+ * Section 10: Question Refinement Routes
+ * Allows teachers to edit individual questions instead of regenerating full papers
+ * Cost: ~₹0.30 per question vs ₹4.50 per full 25-question paper
+ */
+
+import { validateQuestion } from "../schemas/questionPaper";
+import { broadcastToJob } from "../utils/websocket";
+
+type RefinementAction =
+  | "simplify"
+  | "rephrase"
+  | "harder"
+  | "easier"
+  | "mcq"
+  | "translate"
+  | "custom";
+
+/**
+ * POST /api/assessment/:jobId/refine
+ * Refine a single question in an existing paper
+ * Body: {
+ *   sectionName: 'Section B',
+ *   questionNumber: 3,
+ *   action: 'simplify' | 'rephrase' | 'harder' | 'easier' | 'mcq' | 'translate' | 'custom',
+ *   customInstruction?: string,
+ *   targetLanguage?: 'en' | 'hi'
+ * }
+ */
+router.post("/:jobId/refine", async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    const { sectionName, questionNumber, action, customInstruction, targetLanguage } = req.body;
+
+    logger.info("POST /assessment/:jobId/refine", {
+      jobId,
+      sectionName,
+      questionNumber,
+      action,
+    });
+
+    // Validation
+    if (!sectionName || typeof sectionName !== "string") {
+      return res.status(400).json({ error: "sectionName is required" });
+    }
+
+    if (!Number.isFinite(questionNumber) || questionNumber < 1) {
+      return res.status(400).json({ error: "questionNumber must be a positive integer" });
+    }
+
+    const validActions: RefinementAction[] = [
+      "simplify",
+      "rephrase",
+      "harder",
+      "easier",
+      "mcq",
+      "translate",
+      "custom",
+    ];
+    if (!validActions.includes(action)) {
+      return res.status(400).json({ error: `action must be one of: ${validActions.join(", ")}` });
+    }
+
+    if (action === "custom" && !customInstruction) {
+      return res.status(400).json({ error: "customInstruction is required when action is 'custom'" });
+    }
+
+    if (action === "translate" && !["en", "hi"].includes(targetLanguage)) {
+      return res.status(400).json({ error: "targetLanguage must be 'en' or 'hi'" });
+    }
+
+    // Load assignment
+    const assignment = await getAssignment(jobId);
+    if (!assignment) {
+      return res.status(404).json({ error: "Assignment not found" });
+    }
+
+    if (!assignment.output) {
+      return res.status(400).json({ error: "Assignment has no output yet" });
+    }
+
+    // Find section
+    const sectionIndex = assignment.output.sections.findIndex((s) => s.name === sectionName);
+    if (sectionIndex === -1) {
+      return res.status(400).json({ error: `Section "${sectionName}" not found` });
+    }
+
+    const section = assignment.output.sections[sectionIndex];
+
+    // Find question (questionNumber is 1-indexed in API, but 0-indexed in array)
+    const questionIndex = questionNumber - 1;
+    if (questionIndex < 0 || questionIndex >= section.questions.length) {
+      return res.status(400).json({
+        error: `Question ${questionNumber} not found in ${sectionName} (has ${section.questions.length} questions)`,
+      });
+    }
+
+    const originalQuestion = section.questions[questionIndex];
+
+    // Build surgical prompt and call LLM
+    const refinedQuestion = await refineQuestion(
+      originalQuestion,
+      assignment.input.grade,
+      action,
+      customInstruction,
+      targetLanguage,
+    );
+
+    // Validate refined question
+    const validation = validateQuestion(refinedQuestion);
+    if (!validation.valid) {
+      logger.error("Refined question validation failed", {
+        errors: validation.errors,
+        question: refinedQuestion,
+      });
+      return res.status(500).json({
+        error: "Generated question validation failed",
+        details: validation.errors,
+      });
+    }
+
+    // Update MongoDB
+    const editEntry = {
+      timestamp: new Date(),
+      sectionName,
+      questionNumber,
+      action,
+      originalQuestion,
+      newQuestion: refinedQuestion,
+    };
+
+    // Update section with new question
+    assignment.output.sections[sectionIndex].questions[questionIndex] = refinedQuestion;
+
+    // Track edit history (max 100 edits per paper)
+    const editHistory = (assignment as any).edit_history || [];
+    editHistory.push(editEntry);
+    if (editHistory.length > 100) {
+      editHistory.shift();
+    }
+
+    // Save to database
+    await Assignment.updateOne(
+      { jobId },
+      {
+        $set: {
+          "output.sections": assignment.output.sections,
+          edit_history: editHistory,
+          updatedAt: new Date(),
+        },
+      },
+    );
+
+    logger.info("Question refined and saved", { jobId, sectionName, questionNumber });
+
+    // Notify clients via WebSocket
+    try {
+      broadcastToJob(jobId, {
+        type: "progress",
+        jobId,
+        status: "question_updated",
+        message: JSON.stringify({
+          sectionName,
+          questionNumber,
+          newQuestion: refinedQuestion,
+          editHistory,
+        }),
+      });
+    } catch (error) {
+      logger.warn("WebSocket broadcast failed:", error);
+    }
+
+    // Return refined question
+    return res.json({
+      success: true,
+      sectionName,
+      questionNumber,
+      newQuestion: refinedQuestion,
+      editHistory,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * GET /api/assessment/:jobId/edit-history
+ * Retrieve edit history for a paper
+ */
+router.get("/:jobId/edit-history", async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    const assignment = await getAssignment(jobId);
+
+    if (!assignment) {
+      return res.status(404).json({ error: "Assignment not found" });
+    }
+
+    const editHistory = (assignment as any).edit_history || [];
+    return res.json({ editHistory });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * POST /api/assessment/:jobId/undo
+ * Undo the last edit to a question
+ */
+router.post("/:jobId/undo", async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    const assignment = await getAssignment(jobId);
+
+    if (!assignment || !assignment.output) {
+      return res.status(404).json({ error: "Assignment not found" });
+    }
+
+    const editHistory = (assignment as any).edit_history || [];
+    if (editHistory.length === 0) {
+      return res.status(400).json({ error: "No edits to undo" });
+    }
+
+    // Pop the last edit
+    const lastEdit = editHistory.pop();
+    const { sectionName, questionNumber, originalQuestion } = lastEdit;
+    const sectionIndex = assignment.output.sections.findIndex((s) => s.name === sectionName);
+    const questionIndex = questionNumber - 1;
+
+    if (sectionIndex >= 0 && questionIndex >= 0) {
+      assignment.output.sections[sectionIndex].questions[questionIndex] = originalQuestion;
+    }
+
+    // Save to database
+    await Assignment.updateOne(
+      { jobId },
+      {
+        $set: {
+          "output.sections": assignment.output.sections,
+          edit_history: editHistory,
+          updatedAt: new Date(),
+        },
+      },
+    );
+
+    logger.info("Undo applied", { jobId, lastEdit });
+
+    // Notify via WebSocket
+    try {
+      broadcastToJob(jobId, {
+        type: "progress",
+        jobId,
+        status: "question_restored",
+        message: JSON.stringify({
+          sectionName,
+          questionNumber,
+          restoredQuestion: originalQuestion,
+        }),
+      });
+    } catch (error) {
+      logger.warn("WebSocket broadcast failed:", error);
+    }
+
+    return res.json({
+      success: true,
+      restored: { sectionName, questionNumber, question: originalQuestion },
+      editHistory,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * Refine a single question using LLM
+ * Builds a surgical prompt targeting only the question and action
+ */
+async function refineQuestion(
+  question: any,
+  grade: string,
+  action: RefinementAction,
+  customInstruction?: string,
+  targetLanguage?: string,
+): Promise<any> {
+  const actionPrompts: Record<RefinementAction, string> = {
+    simplify:
+      "Rewrite this question to be simpler and more straightforward while keeping the same topic and marks.",
+    rephrase: "Rephrase this question using different wording but keep the same meaning and difficulty.",
+    easier: "Rewrite this question to be easier to answer while keeping the same topic and marks.",
+    harder: "Rewrite this question to be more challenging while keeping the same topic and marks.",
+    mcq: "Convert this question into a multiple choice question (MCQ) with 4 options. Keep the marks the same.",
+    translate: `Translate this question to ${targetLanguage === "hi" ? "Hindi" : "English"}. Keep the marks and difficulty.`,
+    custom: customInstruction || "Modify this question based on the instruction provided.",
+  };
+
+  const actionDescription = actionPrompts[action];
+  // @ts-expect-error - systemPrompt will be used when LLM integration is complete
+  const systemPrompt = `You are an expert exam question editor. You refine individual questions for educational assessments. 
+Return ONLY valid JSON matching this schema (no markdown, no explanation):
+{
+  "text": "The question text",
+  "type": "MCQ" | "ShortAnswer" | "LongAnswer" | "TrueFalse" | "FillInTheBlank",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "difficulty": "Easy" | "Moderate" | "Hard",
+  "marks": number
+}`;
+
+  // @ts-expect-error - userPrompt will be used when LLM integration is complete
+  const userPrompt = `Grade: ${grade}
+Original Question (${question.type}, ${question.difficulty}, ${question.marks} marks):
+${question.text}
+${question.options ? `\nOptions:\n${question.options.map((o: string, i: number) => `${String.fromCharCode(65 + i)}. ${o}`).join("\n")}` : ""}
+
+Action: ${actionDescription}
+
+Refined Question:`;
+
+  try {
+    // TODO: Integrate with Anthropic Haiku API or Groq for faster refinement
+    // For now, use mock response for testing
+    logger.warn("refineQuestion: LLM call not yet implemented - using mock response");
+    
+    const refinedJson = JSON.stringify({
+      text: `Refined version of: ${question.text.substring(0, 50)}...`,
+      type: question.type,
+      options: question.options,
+      difficulty: question.difficulty,
+      marks: question.marks,
+    });
+
+    const parsed = JSON.parse(refinedJson) as any;
+
+    // Ensure number field is preserved
+    return {
+      number: question.number,
+      text: parsed.text || question.text,
+      type: parsed.type || question.type,
+      options: parsed.options,
+      difficulty: parsed.difficulty || question.difficulty,
+      marks: parsed.marks || question.marks,
+    };
+  } catch (error) {
+    logger.error("Failed to refine question via LLM", {
+      error: error instanceof Error ? error.message : String(error),
+      questionId: question.number,
+    });
+    throw error;
+  }
+}
+
 export default router;
