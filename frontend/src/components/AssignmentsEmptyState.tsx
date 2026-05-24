@@ -5,9 +5,9 @@ import Link from "next/link";
 
 export default function AssignmentsEmptyState() {
   return (
-    <div className="fixed md:top-28 md:left-96 md:right-3 md:bottom-3 top-20 left-4 right-4 bottom-4 flex flex-col items-center justify-center bg-gradient-to-b from-gray-200 to-gray-300 rounded-2xl">
+    <div className="fixed top-28 left-96 right-3 bottom-3 flex flex-col items-center justify-center bg-gradient-to-b from-gray-200 to-gray-300 rounded-2xl">
       {/* Illustration Container */}
-      <div className="relative w-64 h-64 md:w-80 md:h-80 mb-8">
+      <div className="relative w-80 h-80 mb-8">
         {/* Background Shape */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="relative w-60 h-60">
@@ -53,7 +53,7 @@ export default function AssignmentsEmptyState() {
       </div>
 
       {/* Text Content */}
-      <div className="text-center mb-8 max-w-xl px-4">
+      <div className="text-center mb-8 max-w-xl">
         <h2 className="text-[#303030] text-2xl font-bold mb-3 tracking-tight">
           No assignments yet
         </h2>
@@ -67,7 +67,7 @@ export default function AssignmentsEmptyState() {
       {/* CTA Button */}
       <Link
         href="/create"
-        className="bg-[#181818] border-2 border-white/50 hover:bg-[#222] transition rounded-full px-8 md:px-12 py-3 flex items-center gap-2 text-white font-medium shadow-lg"
+        className="bg-[#181818] border-2 border-white/50 hover:bg-[#222] transition rounded-full px-12 py-3 flex items-center gap-2 text-white font-medium shadow-lg"
       >
         <Plus size={20} className="text-white" />
         <span>Create Your First Assignment</span>

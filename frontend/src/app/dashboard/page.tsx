@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import AssignmentsEmptyState from "@/components/AssignmentsEmptyState";
+import MobileAssignmentsList from "@/components/MobileAssignmentsList";
 import { getApiUrl } from "@/lib/api-config";
 import Link from "next/link";
 
@@ -13,6 +14,18 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    // Detect mobile screen size
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -65,9 +78,22 @@ export default function DashboardPage() {
     }
   };
 
+  if (isMobile) {
+    return (
+      <DashboardLayout>
+        <MobileAssignmentsList
+          assignments={assignments}
+          loading={loading}
+          onDelete={handleDelete}
+          onNavigate={() => setOpenMenuId(null)}
+        />
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
-      <div className="min-h-[calc(100vh-200px)] flex flex-col gap-6 px-4 md:px-8 py-8">
+      <div className="min-h-[calc(100vh-200px)] flex flex-col gap-6 px-8 py-8">
         {/* Header Section */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
@@ -138,7 +164,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Content */}
-        {loading ? (
+        {isMobile ? (
+          <MobileAssignmentsList
+            assignments={assignments}
+            loading={loading}
+            onDelete={handleDelete}
+            onNavigate={() => setOpenMenuId(null)}
+          />
+        ) : loading ? (
           <div className="flex items-center justify-center h-96">
             <p className="text-gray-500">Loading assignments...</p>
           </div>
@@ -146,7 +179,7 @@ export default function DashboardPage() {
           <AssignmentsEmptyState />
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               {assignments.map((a) => (
                 <div
                   key={a.jobId}
@@ -285,7 +318,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Create Assignment Button */}
-            <div className="flex justify-center mt-8">
+            <div className="flex justify-center mt-44">
               <Link
                 href="/create"
                 className="px-6 py-3 bg-black text-white rounded-full font-semibold flex items-center gap-2 hover:bg-gray-900 transition-colors"

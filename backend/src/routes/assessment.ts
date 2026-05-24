@@ -845,7 +845,9 @@ type RefinementAction =
   | "translate"
   | "custom";
 
-function recalculateOutputTotals(sections: Array<{ questions: Array<{ marks: number }> }>) {
+function recalculateOutputTotals(
+  sections: Array<{ questions: Array<{ marks: number }> }>,
+) {
   return {
     totalQuestions: sections.reduce(
       (sum, section) => sum + section.questions.length,
@@ -853,7 +855,11 @@ function recalculateOutputTotals(sections: Array<{ questions: Array<{ marks: num
     ),
     totalMarks: sections.reduce(
       (sum, section) =>
-        sum + section.questions.reduce((sectionSum, question) => sectionSum + question.marks, 0),
+        sum +
+        section.questions.reduce(
+          (sectionSum, question) => sectionSum + question.marks,
+          0,
+        ),
       0,
     ),
   };
@@ -1249,8 +1255,13 @@ router.post("/:jobId/undo", async (req, res, next) => {
 
     // Pop the last edit
     const lastEdit = editHistory.pop();
-    const { sectionName, questionNumber, originalQuestion, originalSection, scope } =
-      lastEdit;
+    const {
+      sectionName,
+      questionNumber,
+      originalQuestion,
+      originalSection,
+      scope,
+    } = lastEdit;
     const sectionIndex = assignment.output.sections.findIndex(
       (s) => s.name === sectionName,
     );
@@ -1305,9 +1316,10 @@ router.post("/:jobId/undo", async (req, res, next) => {
 
     return res.json({
       success: true,
-      restored: scope === "section"
-        ? { sectionName, section: originalSection, scope }
-        : { sectionName, questionNumber, question: originalQuestion, scope },
+      restored:
+        scope === "section"
+          ? { sectionName, section: originalSection, scope }
+          : { sectionName, questionNumber, question: originalQuestion, scope },
       editHistory,
     });
   } catch (error) {
@@ -1472,8 +1484,7 @@ async function refineSection(
       "Rewrite the entire section to be easier to answer while preserving the number of questions, marks distribution, and topic.",
     harder:
       "Rewrite the entire section to be more challenging while preserving the number of questions, marks distribution, and topic.",
-    mcq:
-      "Convert the entire section into questions of the same type wherever possible, but keep the same number of questions, numbering, and marks. If a question cannot be converted cleanly, preserve its intent.",
+    mcq: "Convert the entire section into questions of the same type wherever possible, but keep the same number of questions, numbering, and marks. If a question cannot be converted cleanly, preserve its intent.",
     translate: `Translate the entire section to ${targetLanguage === "hi" ? "Hindi" : "English"} while preserving the number of questions, numbering, marks, and section instruction.`,
     custom:
       customInstruction ||
@@ -1548,7 +1559,8 @@ Return ONLY valid JSON matching this schema:
             text: question.text || section.questions[index]?.text || "",
             type: question.type || section.questions[index]?.type,
             options: question.options || section.questions[index]?.options,
-            difficulty: question.difficulty || section.questions[index]?.difficulty,
+            difficulty:
+              question.difficulty || section.questions[index]?.difficulty,
             marks: question.marks || section.questions[index]?.marks,
           }))
         : section.questions,

@@ -1,57 +1,73 @@
 "use client";
 
-import { ArrowLeft, Bell } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, Bell, ChevronDown, LayoutGrid } from "lucide-react";
 import Link from "next/link";
 
 export default function DashboardHeader() {
+  const [userName, setUserName] = useState("John Doe");
+
+  useEffect(() => {
+    const onSettings = () => {
+      try {
+        const n = localStorage.getItem("assessai_userName");
+        if (n) setUserName(n);
+      } catch (e) {
+        /* ignore */
+      }
+    };
+
+    try {
+      const n = localStorage.getItem("assessai_userName");
+      if (n) setUserName(n);
+    } catch (e) {
+      /* ignore */
+    }
+
+    window.addEventListener(
+      "assessai:settingsUpdated",
+      onSettings as EventListener,
+    );
+    return () =>
+      window.removeEventListener(
+        "assessai:settingsUpdated",
+        onSettings as EventListener,
+      );
+  }, []);
+
   return (
-    <div className="bg-white/75 backdrop-blur-md fixed top-3 left-3 right-3 md:left-[327px] md:right-3 flex items-center gap-2 px-4 md:px-6 py-3 rounded-2xl h-14 md:w-[calc(100%-351px)]">
-      {/* Back Button */}
+    <div className="fixed top-3 left-[327px] right-3 z-20 flex h-14 items-center rounded-[18px] border border-black/5 bg-white px-4 shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
       <Link
         href="/"
-        className="flex items-center justify-center bg-white hover:bg-gray-50 rounded-full w-10 h-10 transition flex-shrink-0"
+        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full transition hover:bg-[#f4f4f4]"
       >
         <ArrowLeft size={24} className="text-[#303030]" />
       </Link>
 
-      {/* Title */}
-      <div className="flex items-center gap-2 flex-1">
-        <div className="text-[20px] text-[#a9a9a9]">📋</div>
-        <span className="text-[16px] font-semibold text-[#a9a9a9]">
+      <div className="flex flex-1 items-center gap-2 pl-1">
+        <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[#f3f3f3] text-[#b3b3b3]">
+          <LayoutGrid size={14} strokeWidth={2.1} />
+        </div>
+        <span className="text-[16px] font-medium tracking-[-0.02em] text-[#b7b7b7]">
           Assignment
         </span>
       </div>
 
-      {/* Right Icons */}
-      <div className="flex items-center gap-3 ml-auto">
-        {/* Notification Bell */}
-        <button className="bg-[#f6f6f6] hover:bg-gray-200 transition rounded-full p-2 relative">
-          <Bell size={24} className="text-[#303030]" />
-          <div className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></div>
+      <div className="ml-auto flex items-center gap-3">
+        <button className="relative rounded-full p-2 transition hover:bg-[#f4f4f4]">
+          <Bell size={24} className="text-[#141414]" />
+          <div className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#ff5a32]" />
         </button>
 
-        {/* User Profile */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full drop-shadow-lg bg-white/95">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-b from-gray-300 to-gray-400 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-sm">👤</span>
+        <button className="flex items-center gap-2 rounded-full px-1 py-1 pr-2 transition hover:bg-[#f4f4f4]">
+          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-b from-[#e8c7b4] to-[#d39d84]">
+            <span className="text-sm">👤</span>
           </div>
-          <span className="text-[16px] font-semibold text-[#303030]">
-            John Doe
+          <span className="text-[16px] font-medium text-[#303030]">
+            {userName}
           </span>
-          <svg
-            className="w-4 h-4 text-[#303030]"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 14l-7 7m0 0l-7-7m7 7V3"
-            />
-          </svg>
-        </div>
+          <ChevronDown size={16} className="text-[#303030]" />
+        </button>
       </div>
     </div>
   );
