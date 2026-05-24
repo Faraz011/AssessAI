@@ -10,6 +10,7 @@ import path from "path";
 import fs from "fs";
 import { promises as fsPromises } from "fs";
 import { logger } from "../utils/logger";
+import { generatePDF } from "../services/pdfGenerator";
 import {
   createAssignment,
   getAssignment,
@@ -338,6 +339,8 @@ router.get("/status/:jobId", async (_req, res, next) => {
   try {
     const { jobId } = _req.params;
     logger.info("GET /assessment/status", { jobId });
+    const baseUrl = `${_req.protocol}://${_req.get("host")}`;
+    const buildDownloadUrl = (id: string) => `${baseUrl}/api/assessment/download/${id}`;
 
     const assignment = await getAssignment(jobId);
 
@@ -368,7 +371,7 @@ router.get("/status/:jobId", async (_req, res, next) => {
         pdfPath: assignment.output.pdfPath,
         generatedAt: assignment.output.generatedAt,
       };
-      response.downloadUrl = `/api/assessment/download/${jobId}`;
+      response.downloadUrl = buildDownloadUrl(jobId);
     }
 
     // Include input metadata for display
@@ -409,13 +412,58 @@ router.get("/download/:jobId", async (_req, res, next) => {
       return;
     }
 
-    if (assignment.status !== "done" || !assignment.output?.pdfPath) {
+    if (assignment.status !== "done" || !assignment.output) {
       res.status(400).json({ error: "Assessment not ready for download" });
       return;
     }
 
-    // Verify file exists
-    const pdfPath = assignment.output.pdfPath;
+    let pdfPath = assignment.output.pdfPath;
+
+    // Older assignments may not have a persisted PDF path yet.
+    // Generate one on demand so download/preview still work.
+    if (!pdfPath) {
+      const safeSections = Array.isArray(assignment.output.sections)
+        ? assignment.output.sections.map((section) => ({
+            ...section,
+            instruction:
+              typeof section.instruction === "string" &&
+              section.instruction.trim().length > 0
+                ? section.instruction
+                : "Attempt all questions.",
+            questions: Array.isArray(section.questions)
+              ? section.questions
+              : [],
+          }))
+        : [];
+
+      const pdfResult = await generatePDF(
+        {
+          ...assignment.output,
+          sections: safeSections,
+        },
+        {
+          jobId,
+          title: assignment.input.title,
+          subject: assignment.input.subject,
+          grade: assignment.input.grade,
+          date: assignment.output.generatedAt,
+        },
+      );
+
+      pdfPath = pdfResult.filePath;
+
+      await Assignment.updateOne(
+        { jobId },
+        {
+          $set: {
+            "output.pdfPath": pdfPath,
+            updatedAt: new Date(),
+          },
+        },
+      );
+    }
+
+    // Verify file exists before streaming
     try {
       await fsPromises.access(pdfPath);
     } catch {
@@ -558,6 +606,8 @@ router.get("/stats", async (_req, res, next) => {
 router.get("/latest", async (_req, res, next) => {
   try {
     logger.info("GET /assessment/latest");
+    const baseUrl = `${_req.protocol}://${_req.get("host")}`;
+    const buildDownloadUrl = (id: string) => `${baseUrl}/api/assessment/download/${id}`;
     const recent = await findRecent(1);
     if (!recent || recent.length === 0) {
       return res.status(204).json({});
@@ -580,7 +630,7 @@ router.get("/latest", async (_req, res, next) => {
         pdfPath: a.output.pdfPath,
         generatedAt: a.output.generatedAt,
       };
-      response.downloadUrl = `/api/assessment/download/${a.jobId}`;
+      response.downloadUrl = buildDownloadUrl(a.jobId);
     }
 
     response.input = {
@@ -605,6 +655,8 @@ router.get("/latest", async (_req, res, next) => {
 router.get("/", async (req, res, next) => {
   try {
     logger.info("GET /assessment list", { query: req.query });
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const buildDownloadUrl = (id: string) => `${baseUrl}/api/assessment/download/${id}`;
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const items = await findRecent(limit);
 
@@ -630,7 +682,7 @@ router.get("/", async (req, res, next) => {
           totalMarks: a.output.totalMarks,
           pdfPath: a.output.pdfPath,
         };
-        out.downloadUrl = `/api/assessment/download/${a.jobId}`;
+        out.downloadUrl = buildDownloadUrl(a.jobId);
       }
 
       return out;

@@ -177,7 +177,13 @@ export async function generatePDF(
     yPosition -= 10;
 
     // Question Sections
-    for (const section of questionPaper.sections) {
+    for (const section of questionPaper.sections || []) {
+      const questions = Array.isArray(section.questions) ? section.questions : [];
+      const sectionInstruction =
+        typeof section.instruction === "string" && section.instruction.trim().length > 0
+          ? section.instruction
+          : "Attempt all questions.";
+
       // Section header
       if (yPosition < margin + 100) {
         currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -197,7 +203,7 @@ export async function generatePDF(
       });
 
       // Section name and total marks
-      const sectionMarks = section.questions.reduce(
+      const sectionMarks = questions.reduce(
         (sum, q) => sum + q.marks,
         0,
       );
@@ -212,10 +218,10 @@ export async function generatePDF(
       yPosition = headerY - 10;
 
       // Section instruction
-      addText(section.instruction, 10, false, 5, 8, false);
+      addText(sectionInstruction, 10, false, 5, 8, false);
 
       // Questions in section
-      for (const question of section.questions) {
+      for (const question of questions) {
         if (yPosition < margin + 50) {
           currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
           yPosition = pageHeight - margin;

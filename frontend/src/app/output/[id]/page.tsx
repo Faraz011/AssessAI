@@ -27,18 +27,6 @@ interface QuestionRefineState {
   customText?: string;
 }
 
-function resolveApiPath(pathOrUrl?: string): string {
-  if (!pathOrUrl) {
-    return "";
-  }
-
-  if (/^https?:\/\//i.test(pathOrUrl) || pathOrUrl.startsWith("ws")) {
-    return pathOrUrl;
-  }
-
-  return `${getApiUrl()}${pathOrUrl.startsWith("/") ? "" : "/"}${pathOrUrl}`;
-}
-
 export default function OutputPage() {
   const params = useParams();
   const router = useRouter();
@@ -160,9 +148,7 @@ export default function OutputPage() {
   const handleDownload = async () => {
     try {
       setIsDownloading(true);
-      const downloadUrl = resolveApiPath(
-        assignment?.downloadUrl || `/api/assessment/download/${jobId}`,
-      );
+      const downloadUrl = `/api/assessment/download/${jobId}`;
       const response = await fetch(downloadUrl);
       if (!response.ok) throw new Error("Download failed");
 
@@ -508,7 +494,7 @@ export default function OutputPage() {
                       <div className="p-4">
                         {assignment.downloadUrl || assignment.result.pdfPath ? (
                           <iframe
-                            src={`${resolveApiPath(assignment.downloadUrl || `/api/assessment/download/${jobId}`)}?preview=1`}
+                            src={`/api/assessment/download/${jobId}?preview=1`}
                             className="w-full h-48 rounded-md bg-white"
                             title="PDF Preview"
                           />
