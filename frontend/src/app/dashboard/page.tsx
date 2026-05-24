@@ -14,7 +14,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean | null>(null); // null = not yet hydrated
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile sidebar toggle
 
   useEffect(() => {
     // Detect mobile screen size
@@ -78,16 +79,90 @@ export default function DashboardPage() {
     }
   };
 
+  // Wait for hydration before rendering (avoid hydration mismatch)
+  if (isMobile === null) {
+    return null;
+  }
+
   if (isMobile) {
     return (
-      <DashboardLayout>
+      <div className="relative w-full h-screen">
         <MobileAssignmentsList
           assignments={assignments}
           loading={loading}
           onDelete={handleDelete}
           onNavigate={() => setOpenMenuId(null)}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         />
-      </DashboardLayout>
+        
+        {/* Mobile Sidebar Overlay */}
+        {sidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/50 z-40"
+              onClick={() => setSidebarOpen(false)}
+            />
+            {/* Mobile Sidebar */}
+            <div className="fixed inset-0 z-50 pointer-events-none">
+              <div
+                className="pointer-events-auto bg-white h-screen w-80 max-w-[90vw] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-6 flex flex-col gap-14">
+                  {/* Close button */}
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-[#303030]">Menu</h2>
+                    <button
+                      onClick={() => setSidebarOpen(false)}
+                      className="p-2 hover:bg-gray-100 rounded-md"
+                    >
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Navigation Links */}
+                  <nav className="flex flex-col gap-4">
+                    <Link
+                      href="/dashboard"
+                      className="text-[#303030] hover:text-[#FF5623] transition font-semibold"
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/create"
+                      className="text-[#303030] hover:text-[#FF5623] transition font-semibold"
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      Create
+                    </Link>
+                    <Link
+                      href="/settings"
+                      className="text-[#303030] hover:text-[#FF5623] transition font-semibold"
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      Settings
+                    </Link>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     );
   }
 
