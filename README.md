@@ -176,9 +176,9 @@ npm run dev
 
 ### 4. Access the Application
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:4000
-- **WebSocket**: ws://localhost:4000/ws/:jobId
+- **Frontend**: https://assess-ai-drab.vercel.app
+- **Backend API**: https://assessai-3r2j.onrender.com
+
 
 ## 🧪 Testing
 
