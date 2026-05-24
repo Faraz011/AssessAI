@@ -12,7 +12,7 @@ import {
 
 export default function Sidebar() {
   return (
-    <div className="bg-white drop-shadow-lg flex flex-col h-[756px] justify-between p-6 rounded-2xl w-[304px] fixed left-3 top-3">
+    <div className="hidden md:flex bg-white drop-shadow-lg flex-col md:h-[756px] md:justify-between p-6 rounded-2xl md:w-[304px] md:fixed md:left-3 md:top-3">
       {/* Logo & Brand */}
       <div className="flex flex-col gap-14">
         <div className="flex items-center gap-2">
@@ -27,7 +27,7 @@ export default function Sidebar() {
         {/* Create Assignment Button */}
         <Link
           href="/create"
-          className="w-full border-4 border-[#ff7950] bg-[#272727] hover:bg-[#333] rounded-full py-2 px-11 flex items-center justify-center gap-2 transition group"
+          className="w-full border-4 border-[#ff7950] bg-[#272727] hover:bg-[#333] rounded-full py-2 px-6 md:px-11 flex items-center justify-center gap-2 transition group"
         >
           <span className="text-white text-lg">+</span>
           <span className="text-white font-medium text-sm">

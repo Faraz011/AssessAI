@@ -67,7 +67,7 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="min-h-[calc(100vh-200px)] flex flex-col gap-6 px-8 py-8">
+      <div className="min-h-[calc(100vh-200px)] flex flex-col gap-6 px-4 md:px-8 py-8">
         {/* Header Section */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
@@ -146,7 +146,7 @@ export default function DashboardPage() {
           <AssignmentsEmptyState />
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {assignments.map((a) => (
                 <div
                   key={a.jobId}

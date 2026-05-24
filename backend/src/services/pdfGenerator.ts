@@ -86,13 +86,11 @@ function safeNumber(value: unknown, fallback: number): number {
 function normalizeQuestionPaper(
   questionPaper: QuestionPaperPDF,
 ): SafeQuestionPaper {
-  const sections = (Array.isArray(questionPaper.sections)
-    ? questionPaper.sections
-    : []
+  const sections = (
+    Array.isArray(questionPaper.sections) ? questionPaper.sections : []
   ).map((section, sectionIndex) => {
-    const questions = (Array.isArray(section.questions)
-      ? section.questions
-      : []
+    const questions = (
+      Array.isArray(section.questions) ? section.questions : []
     ).map((question, questionIndex) => {
       const type =
         question.type === "MCQ" ||
@@ -110,13 +108,14 @@ function normalizeQuestionPaper(
           ? question.difficulty
           : "Moderate";
 
-      const normalizedQuestion: SafeQuestionPaper["sections"][number]["questions"][number] = {
-        number: safeNumber(question.number, questionIndex + 1),
-        text: safeText(question.text, "Question text unavailable."),
-        difficulty,
-        marks: safeNumber(question.marks, 1),
-        type,
-      };
+      const normalizedQuestion: SafeQuestionPaper["sections"][number]["questions"][number] =
+        {
+          number: safeNumber(question.number, questionIndex + 1),
+          text: safeText(question.text, "Question text unavailable."),
+          difficulty,
+          marks: safeNumber(question.marks, 1),
+          type,
+        };
 
       if (type === "MCQ") {
         const options = Array.isArray(question.options) ? question.options : [];
@@ -136,7 +135,10 @@ function normalizeQuestionPaper(
     });
 
     return {
-      name: safeText(section.name, `Section ${String.fromCharCode(65 + sectionIndex)}`),
+      name: safeText(
+        section.name,
+        `Section ${String.fromCharCode(65 + sectionIndex)}`,
+      ),
       instruction: safeText(section.instruction, "Attempt all questions."),
       questions,
     };
@@ -149,7 +151,11 @@ function normalizeQuestionPaper(
 
   const totalMarks = sections.reduce(
     (sum, section) =>
-      sum + section.questions.reduce((sectionSum, question) => sectionSum + question.marks, 0),
+      sum +
+      section.questions.reduce(
+        (sectionSum, question) => sectionSum + question.marks,
+        0,
+      ),
     0,
   );
 
@@ -183,7 +189,10 @@ export async function generatePDF(
     const headerLine = pdfSubject
       ? `Subject: ${pdfSubject} • Class: ${pdfGrade}`
       : `Class: ${pdfGrade}`;
-    const totalMarks = safeNumber(safePaper.totalMarks, questionPaper.totalMarks);
+    const totalMarks = safeNumber(
+      safePaper.totalMarks,
+      questionPaper.totalMarks,
+    );
 
     // Create PDF document
     const pdfDoc = await PDFDocument.create();
@@ -290,8 +299,11 @@ export async function generatePDF(
 
     // Question Sections
     for (const section of safePaper.sections || []) {
-      const questions = Array.isArray(section.questions) ? section.questions : [];
-      const sectionInstruction = section.instruction || "Attempt all questions.";
+      const questions = Array.isArray(section.questions)
+        ? section.questions
+        : [];
+      const sectionInstruction =
+        section.instruction || "Attempt all questions.";
 
       // Section header
       if (yPosition < margin + 100) {

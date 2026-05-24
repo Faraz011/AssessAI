@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export default function DashboardHeader() {
   return (
-    <div className="bg-white/75 backdrop-blur-md fixed top-3 left-[327px] right-3 flex items-center gap-2 px-6 py-3 rounded-2xl h-14 w-[calc(100%-351px)]">
+    <div className="bg-white/75 backdrop-blur-md fixed top-3 left-3 right-3 md:left-[327px] md:right-3 flex items-center gap-2 px-4 md:px-6 py-3 rounded-2xl h-14 md:w-[calc(100%-351px)]">
       {/* Back Button */}
       <Link
         href="/"

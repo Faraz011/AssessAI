@@ -340,7 +340,8 @@ router.get("/status/:jobId", async (_req, res, next) => {
     const { jobId } = _req.params;
     logger.info("GET /assessment/status", { jobId });
     const baseUrl = `${_req.protocol}://${_req.get("host")}`;
-    const buildDownloadUrl = (id: string) => `${baseUrl}/api/assessment/download/${id}`;
+    const buildDownloadUrl = (id: string) =>
+      `${baseUrl}/api/assessment/download/${id}`;
 
     const assignment = await getAssignment(jobId);
 
@@ -419,13 +420,16 @@ router.get("/download/:jobId", async (_req, res, next) => {
 
     // Normalize sections and recompute totals defensively before rendering PDF
     const safePaperInput = {
-      sections: Array.isArray(assignment.output.sections) ? assignment.output.sections : [],
+      sections: Array.isArray(assignment.output.sections)
+        ? assignment.output.sections
+        : [],
       totalQuestions: assignment.output.totalQuestions,
       totalMarks: assignment.output.totalMarks,
     };
 
-    const normalized = (require("../services/pdfGenerator") as any)
-      .normalizeQuestionPaper(safePaperInput as any);
+    const normalized = (
+      require("../services/pdfGenerator") as any
+    ).normalizeQuestionPaper(safePaperInput as any);
 
     logger.info("Regenerating PDF with normalized paper", {
       jobId,
@@ -603,7 +607,8 @@ router.get("/latest", async (_req, res, next) => {
   try {
     logger.info("GET /assessment/latest");
     const baseUrl = `${_req.protocol}://${_req.get("host")}`;
-    const buildDownloadUrl = (id: string) => `${baseUrl}/api/assessment/download/${id}`;
+    const buildDownloadUrl = (id: string) =>
+      `${baseUrl}/api/assessment/download/${id}`;
     const recent = await findRecent(1);
     if (!recent || recent.length === 0) {
       return res.status(204).json({});
@@ -652,7 +657,8 @@ router.get("/", async (req, res, next) => {
   try {
     logger.info("GET /assessment list", { query: req.query });
     const baseUrl = `${req.protocol}://${req.get("host")}`;
-    const buildDownloadUrl = (id: string) => `${baseUrl}/api/assessment/download/${id}`;
+    const buildDownloadUrl = (id: string) =>
+      `${baseUrl}/api/assessment/download/${id}`;
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const items = await findRecent(limit);
 
