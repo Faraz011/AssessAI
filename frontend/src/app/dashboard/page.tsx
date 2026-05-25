@@ -246,8 +246,24 @@ export default function DashboardPage() {
             onNavigate={() => setOpenMenuId(null)}
           />
         ) : loading ? (
-          <div className="flex items-center justify-center h-96">
-            <p className="text-gray-500">Loading assignments...</p>
+          <div className="grid grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="bg-white rounded-[24px] p-6 shadow-[0px_16px_24px_rgba(0,0,0,0.15),0px_32px_48px_rgba(0,0,0,0.1)] h-40 animate-pulse"
+              >
+                <div className="flex flex-col gap-3 h-full justify-between">
+                  <div className="space-y-2">
+                    <div className="h-6 bg-gray-200 rounded-lg w-3/4" />
+                    <div className="h-4 bg-gray-100 rounded-lg w-1/2" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3 bg-gray-100 rounded-lg w-1/2" />
+                    <div className="h-3 bg-gray-100 rounded-lg w-1/2" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : assignments.length === 0 ? (
           <AssignmentsEmptyState />
